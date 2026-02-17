@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — Enterprise Travel Pricing</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f7fa;min-height:100vh}
+        .header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:16px 32px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.1);position:sticky;top:0;z-index:100}
+        .header h1{font-size:22px}
+        .header-right{display:flex;gap:12px;align-items:center}
+        .client-selector{padding:8px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+        .client-selector option{color:#333;background:#fff}
+        .btn-logout{padding:8px 18px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;text-decoration:none;transition:.3s}
+        .btn-logout:hover{background:rgba(255,255,255,.3)}
+        .container{max-width:1600px;margin:30px auto;padding:0 32px}
+        .tabs{display:flex;gap:8px;margin-bottom:24px;background:#fff;padding:12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);flex-wrap:wrap}
+        .tab{padding:10px 20px;cursor:pointer;background:#f8f9fa;border:none;border-radius:6px;font-size:13px;font-weight:600;transition:.3s;color:#666}
+        .tab.active{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;box-shadow:0 4px 12px rgba(102,126,234,.3)}
+        .tab:hover:not(.active){background:#e9ecef}
+        .tab-content{display:none}.tab-content.active{display:block;animation:fadeIn .3s}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .section-card{background:#fff;padding:24px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);margin-bottom:24px}
+        .section-header{font-size:18px;font-weight:700;color:#333;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #f0f0f0}
+        .region-section-divider{margin:32px 0 16px 0;padding:16px;background:linear-gradient(135deg,rgba(102,126,234,.1),rgba(118,75,162,.1));border-radius:8px;border-left:4px solid #667eea}
+        .region-section-title{font-size:20px;font-weight:700;color:#667eea;display:flex;align-items:center;gap:8px}
+        .filter-buttons{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+        .filter-btn{padding:8px 16px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:.3s;color:#666}
+        .filter-btn.active{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:#667eea}
+        .filter-btn:hover:not(.active){background:#e9ecef}
+        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:20px}
+        .form-group{display:flex;flex-direction:column}
+        .form-group label{font-size:12px;font-weight:600;color:#555;margin-bottom:6px}
+        .form-group label .req{color:#e74c3c}
+        .form-group input,.form-group select,.form-group textarea{padding:10px 12px;border:2px solid #e0e0e0;border-radius:6px;font-size:13px;transition:.3s;font-family:inherit}
+        .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+        textarea{min-height:60px;resize:vertical}
+        .checkbox-label{display:flex;align-items:center;font-size:13px;color:#555;cursor:pointer;gap:6px;margin-top:6px}
+        .btn{padding:10px 24px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:.3s}
+        .btn:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(102,126,234,.4)}
+        .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+        .btn-sm{padding:5px 12px;font-size:11px}
+        .btn-danger{background:#e74c3c}.btn-danger:hover{box-shadow:0 6px 18px rgba(231,76,60,.4)}
+        .btn-secondary{background:#6c757d}.btn-secondary:hover{box-shadow:0 6px 18px rgba(108,117,125,.4)}
+        .btn-ai{background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff}.btn-ai:hover{box-shadow:0 6px 18px rgba(240,147,251,.4)}
+        .table-container{overflow-x:auto;margin-top:20px}
+        table{width:100%;border-collapse:collapse}
+        th{background:#f8f9fa;padding:12px;text-align:left;font-weight:600;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e0e0e0}
+        td{padding:12px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#333}
+        tr:hover{background:#f8f9fa}
+        tr.inactive{opacity:.5;background:#f9f9f9}
+        .actions{display:flex;gap:6px;align-items:center}
+        .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600}
+        .badge-active{background:#d4edda;color:#155724}
+        .badge-inactive{background:#f8d7da;color:#721c24}
+        .badge-domestic{background:#cce5ff;color:#004085}
+        .badge-intl{background:#fff3cd;color:#856404}
+        .toggle-switch{position:relative;display:inline-block;width:44px;height:22px}
+        .toggle-switch input{opacity:0;width:0;height:0}
+        .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:.3s;border-radius:22px}
+        .toggle-slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}
+        input:checked+.toggle-slider{background:#27ae60}
+        input:checked+.toggle-slider:before{transform:translateX(22px)}
+        .msg{padding:12px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;display:none}
+        .msg.show{display:block;animation:slideD .3s}
+        @keyframes slideD{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+        .msg.success{background:#d4edda;color:#155724;border-left:4px solid #28a745}
+        .msg.error{background:#f8d7da;color:#721c24;border-left:4px solid #dc3545}
+        .msg.warning{background:#fff3cd;color:#856404;border-left:4px solid #ffc107}
+        .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5)}
+        .modal.show{display:flex;align-items:center;justify-content:center}
+        .modal-content{background:#fff;padding:28px;border-radius:10px;max-width:650px;width:92%;max-height:90vh;overflow-y:auto}
+        .modal-header{font-size:18px;font-weight:700;margin-bottom:16px;color:#333}
+        .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+        .info-box{background:#e3f2fd;border-left:4px solid #2196f3;padding:12px 16px;margin-bottom:20px;border-radius:6px;font-size:13px;color:#1976d2}
+        .info-box-ai{background:#fce4ec;border-left:4px solid #e91e63;padding:12px 16px;margin-bottom:20px;border-radius:6px;font-size:13px;color:#880e4f}
+        .rate-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}
+        .rate-section{padding:12px;background:#f8f9fa;border-radius:6px}
+        .rate-section-title{font-size:11px;font-weight:600;text-transform:uppercase;color:#666;margin-bottom:8px}
+        .json-editor{width:100%;min-height:100px;font-family:'Courier New',monospace;font-size:12px;padding:10px;border:2px solid #e0e0e0;border-radius:6px;resize:vertical}
+        .json-editor:focus{outline:none;border-color:#667eea}
+        .empty-state{text-align:center;padding:40px;color:#999}
+        .empty-state-icon{font-size:48px;margin-bottom:10px}
+        .matrix-rate-input{width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right}
+        .matrix-rate-input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 2px rgba(102,126,234,.15)}
+        .matrix-rate-input.modified{border-color:#28a745;background:#f0fff0}
+        .matrix-table th{position:sticky;top:0;z-index:2;font-size:10px;padding:8px 6px}
+        .matrix-table td{padding:6px;text-align:center;font-size:12px}
+        .matrix-table .cab-name{text-align:left;font-weight:600;position:sticky;left:0;background:#fff;z-index:1;min-width:120px}
+        .matrix-save-bar{display:flex;gap:12px;align-items:center;margin-top:16px;padding:12px;background:#f8f9fa;border-radius:6px}
+        .matrix-save-bar .changes-count{font-size:13px;color:#666}
+        .nl-rule-container{margin-bottom:20px;padding:16px;background:#fafafa;border-radius:8px;border:1px solid #eee}
+        .nl-rule-input{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:6px;font-size:14px;min-height:44px;resize:none;font-family:inherit;transition:.3s}
+        .nl-rule-input:focus{outline:none;border-color:#f093fb;box-shadow:0 0 0 3px rgba(240,147,251,.15)}
+        .nl-rule-input::placeholder{color:#aaa}
+        .nl-rule-actions{display:flex;gap:8px;margin-top:10px;align-items:center}
+        .nl-rule-status{font-size:12px;padding:6px 10px;border-radius:4px;margin-top:8px;display:none}
+        .nl-rule-status.show{display:block}
+        .nl-rule-status.success{background:#d4edda;color:#155724}
+        .nl-rule-status.error{background:#f8d7da;color:#721c24}
+        .nl-rule-status.warning{background:#fff3cd;color:#856404}
+        .nl-rule-examples{margin-top:8px;font-size:11px;color:#888;line-height:1.8}
+        .nl-rule-examples code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:10px}
+        .clarification-box{background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;margin-top:12px;border-radius:6px;font-size:13px;color:#856404;display:none}
+        .clarification-box.show{display:block}
+        @media(max-width:768px){.container{padding:0 16px}.form-grid{grid-template-columns:1fr}.rate-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>Admin Panel — Enterprise Travel Pricing</h1>
+    <div class="header-right">
+        <select class="client-selector" id="globalClientSelector" onchange="onClientChange()">
+            <option value="1">Loading clients...</option>
+        </select>
+        <a href="/" class="btn-logout">← Back to App</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="msg" id="message"></div>
+
+    <div class="tabs">
+        <button class="tab active" data-tab="clients">👥 Clients</button>
+        <button class="tab" data-tab="regions">🌍 Regions</button>
+        <button class="tab" data-tab="transport">🚌 Transport</button>
+        <button class="tab" data-tab="destinations">🏔️ Destinations</button>
+        <button class="tab" data-tab="hotels">🏨 Hotels</button>
+        <button class="tab" data-tab="cabs">🚗 Cabs</button>
+        <button class="tab" data-tab="cab-dest-rates">🚗🏔️ Cab-Dest Rates</button>
+        <button class="tab" data-tab="addons">➕ Add-ons</button>
+        <button class="tab" data-tab="pricing-rules">📐 Pricing Rules</button>
+        <button class="tab" data-tab="global-rules">⚙️ Global Rules</button>
+    </div>
+
+    <!-- ===== CLIENTS TAB ===== -->
+    <div class="tab-content active" id="clients">
+        <div class="section-card">
+            <div class="section-header">Create New Client</div>
+            <form id="clientForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Client Name <span class="req">*</span></label><input type="text" name="name" required placeholder="e.g., AKS Hospitality"></div>
+                    <div class="form-group"><label>Code <span class="req">*</span></label><input type="text" name="code" required placeholder="e.g., aks-hospitality"></div>
+                    <div class="form-group"><label>Email</label><input type="email" name="contact_email" placeholder="admin@example.com"></div>
+                    <div class="form-group"><label>Phone</label><input type="text" name="contact_phone" placeholder="+91..."></div>
+                    <div class="form-group"><label>Default Currency</label><input type="text" name="currency_default" value="INR" placeholder="INR"></div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:12px">Create Client</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Clients</div>
+            <div class="table-container"><table id="clientsTable"><thead><tr><th>ID</th><th>Name</th><th>Code</th><th>Email</th><th>Currency</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== REGIONS TAB (FIXED WITH DOMESTIC/INTERNATIONAL SEPARATION) ===== -->
+    <div class="tab-content" id="regions">
+        <div class="section-card">
+            <div class="section-header">Create New Region</div>
+            <form id="regionForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Region Name <span class="req">*</span></label><input type="text" name="name" required placeholder="e.g., North India"></div>
+                    <div class="form-group">
+                        <label>Region Type <span class="req">*</span></label>
+                        <select name="is_domestic" required>
+                            <option value="true">Domestic</option>
+                            <option value="false">International</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Currency</label><input type="text" name="currency" value="INR"></div>
+                    <div class="form-group"><label>Service %</label><input type="number" step="0.01" name="service_percent" value="15"></div>
+                    <div class="form-group"><label>Booking %</label><input type="number" step="0.01" name="booking_percent" value="12"></div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:12px">Create Region</button>
+            </form>
+        </div>
+
+        <!-- DOMESTIC REGIONS SECTION -->
+        <div class="section-card">
+            <div class="region-section-divider">
+                <div class="region-section-title">🇮🇳 Domestic Regions</div>
+            </div>
+            <div class="table-container">
+                <table id="domesticRegionsTable">
+                    <thead><tr><th>ID</th><th>Name</th><th>Currency</th><th>Service%</th><th>Booking%</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INTERNATIONAL REGIONS SECTION -->
+        <div class="section-card">
+            <div class="region-section-divider">
+                <div class="region-section-title">🌎 International Regions</div>
+            </div>
+            <div class="table-container">
+                <table id="internationalRegionsTable">
+                    <thead><tr><th>ID</th><th>Name</th><th>Currency</th><th>Service%</th><th>Booking%</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TRANSPORT TAB (FIXED WITH PRICING TYPES) ===== -->
+    <div class="tab-content" id="transport">
+        <div class="section-card">
+            <div class="section-header">Create New Transport</div>
+            <form id="transportForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="transportRegion"></select></div>
+                    <div class="form-group"><label>Transport Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Volvo AC Bus"></div>
+                </div>
+                <div class="rate-grid">
+                    <div class="rate-section">
+                        <div class="rate-section-title">Peak Season</div>
+                        <div class="form-group"><label>Adult Rate</label><input type="number" step="0.01" name="adult_rate_peak" value="0"></div>
+                        <div class="form-group" style="margin-top:8px"><label>Child Rate</label><input type="number" step="0.01" name="child_rate_peak" value="0"></div>
+                        <div class="form-group" style="margin-top:8px">
+                            <label>Pricing Type</label>
+                            <select name="peak_pricing_type">
+                                <option value="per_person">Per Person</option>
+                                <option value="per_vehicle">Per Vehicle (Full Transport Cost)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rate-section">
+                        <div class="rate-section-title">Off Season</div>
+                        <div class="form-group"><label>Adult Rate</label><input type="number" step="0.01" name="adult_rate_off" value="0"></div>
+                        <div class="form-group" style="margin-top:8px"><label>Child Rate</label><input type="number" step="0.01" name="child_rate_off" value="0"></div>
+                        <div class="form-group" style="margin-top:8px">
+                            <label>Pricing Type</label>
+                            <select name="off_pricing_type">
+                                <option value="per_person">Per Person</option>
+                                <option value="per_vehicle">Per Vehicle (Full Transport Cost)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:16px">Create Transport</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Transports</div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+            </div>
+            <div class="table-container"><table id="transportsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Peak Adult</th><th>Peak Child</th><th>Peak Type</th><th>Off Adult</th><th>Off Child</th><th>Off Type</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== DESTINATIONS TAB ===== -->
+    <div class="tab-content" id="destinations">
+        <div class="section-card">
+            <div class="section-header">Create New Destination</div>
+            <form id="destinationForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="destRegion"></select></div>
+                    <div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Manali"></div>
+                    <div class="form-group"><label>Base Rate</label><input type="number" step="0.01" name="base_rate" value="0"></div>
+                    <div class="form-group"><label>Per-Day Rate</label><input type="number" step="0.01" name="per_day_rate" value="0"></div>
+                </div>
+                <label class="checkbox-label"><input type="checkbox" name="is_special" value="1"> Special Destination</label>
+                <button type="submit" class="btn" style="margin-top:12px">Create Destination</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Destinations</div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+            </div>
+            <div class="table-container"><table id="destinationsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Base</th><th>Per-Day</th><th>Special</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== HOTELS TAB ===== -->
+    <div class="tab-content" id="hotels">
+        <div class="section-card">
+            <div class="section-header">Create New Hotel</div>
+            <form id="hotelForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="hotelRegion"></select></div>
+                    <div class="form-group"><label>Hotel Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Hotel Paradise"></div>
+                    <div class="form-group"><label>Sharing Type</label>
+                        <select name="sharing_type" id="sharingType">
+                            <option value="DOUBLE">Double (2)</option><option value="QUAD">Quad (4)</option><option value="CUSTOM">Custom</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="customCapGrp" style="display:none"><label>Custom Capacity</label><input type="number" name="custom_capacity" placeholder="3"></div>
+                </div>
+                <div class="rate-grid">
+                    <div class="rate-section"><div class="rate-section-title">Peak Season</div>
+                        <div class="form-group"><label>Adult Rate</label><input type="number" step="0.01" name="adult_rate_peak" value="0"></div>
+                        <div class="form-group" style="margin-top:8px"><label>Child Rate</label><input type="number" step="0.01" name="child_rate_peak" value="0"></div>
+                    </div>
+                    <div class="rate-section"><div class="rate-section-title">Off Season</div>
+                        <div class="form-group"><label>Adult Rate</label><input type="number" step="0.01" name="adult_rate_off" value="0"></div>
+                        <div class="form-group" style="margin-top:8px"><label>Child Rate</label><input type="number" step="0.01" name="child_rate_off" value="0"></div>
+                    </div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:16px">Create Hotel</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Hotels</div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+            </div>
+            <div class="table-container"><table id="hotelsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Sharing</th><th>Peak Adult</th><th>Peak Child</th><th>Off Adult</th><th>Off Child</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== CABS TAB ===== -->
+    <div class="tab-content" id="cabs">
+        <div class="section-card">
+            <div class="section-header">Create New Cab</div>
+            <form id="cabForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="cabRegion"></select></div>
+                    <div class="form-group"><label>Cab Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Alto"></div>
+                    <div class="form-group"><label>Base Rate</label><input type="number" step="0.01" name="base_rate" value="0"></div>
+                    <div class="form-group"><label>Per-Day Rate</label><input type="number" step="0.01" name="per_day_rate" value="0"></div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:12px">Create Cab</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Cabs</div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+            </div>
+            <div class="table-container"><table id="cabsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Base</th><th>Per-Day</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== CAB-DEST RATES TAB ===== -->
+    <div class="tab-content" id="cab-dest-rates">
+        <div class="section-card">
+            <div class="info-box"><strong>Cab-Destination Rate Matrix</strong> — Set specific rates for each cab × destination combination. Every active cab and destination is shown. Edit any cell and click <strong>Save All Changes</strong>.</div>
+            <div class="section-header">Create / Update Rate</div>
+            <form id="cabDestRateForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Cab <span class="req">*</span></label><select name="cab_id" required id="cdrCab"><option value="">Select Cab</option></select></div>
+                    <div class="form-group"><label>Destination <span class="req">*</span></label><select name="destination_id" required id="cdrDest"><option value="">Select Destination</option></select></div>
+                    <div class="form-group"><label>Rate</label><input type="number" step="0.01" name="rate" value="0" placeholder="0"></div>
+                    <div class="form-group"><label>Override Rate</label><input type="number" step="0.01" name="override_rate" value="" placeholder="Leave blank for default"></div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:12px">Save Rate</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">Rate Matrix (All Cabs × All Destinations)</div>
+            <div id="matrixSaveBar" class="matrix-save-bar" style="display:none">
+                <button class="btn" onclick="saveMatrixChanges()">Save All Changes</button>
+                <span class="changes-count" id="matrixChangesCount">0 unsaved changes</span>
+                <button class="btn btn-secondary btn-sm" onclick="discardMatrixChanges()">Discard</button>
+            </div>
+            <div class="table-container" id="matrixContainer">
+                <div class="empty-state"><div class="empty-state-icon">🚗🏔️</div>Loading matrix...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ADDONS TAB (FIXED WITH PEAK/OFF RATES) ===== -->
+    <div class="tab-content" id="addons">
+        <div class="section-card">
+            <div class="section-header">Create New Add-on</div>
+            <form id="addonForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="addonRegion"><option value="">Select Region</option></select></div>
+                    <div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Travel Insurance"></div>
+                    <div class="form-group">
+                        <label>Add-on Type <span class="req">*</span></label>
+                        <select name="addon_type" required>
+                            <option value="GENERAL">General</option>
+                            <option value="INSURANCE">Insurance</option>
+                            <option value="MEAL">Meal</option>
+                            <option value="ACTIVITY">Activity</option>
+                            <option value="TRANSPORT">Transport</option>
+                            <option value="EQUIPMENT">Equipment</option>
+                            <option value="SERVICE">Service</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Pricing Type</label>
+                        <select name="pricing_type"><option value="flat">Flat</option><option value="per_person">Per Person</option><option value="per_day">Per Day</option><option value="per_night">Per Night</option></select>
+                    </div>
+                </div>
+                <div class="rate-grid">
+                    <div class="rate-section">
+                        <div class="rate-section-title">Peak Season</div>
+                        <div class="form-group"><label>Peak Rate</label><input type="number" step="0.01" name="rate_peak" value="0"></div>
+                    </div>
+                    <div class="rate-section">
+                        <div class="rate-section-title">Off Season</div>
+                        <div class="form-group"><label>Off Rate</label><input type="number" step="0.01" name="rate_off" value="0"></div>
+                    </div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:16px">Create Add-on</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Add-ons</div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+            </div>
+            <div class="table-container"><table id="addonsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Type</th><th>Pricing</th><th>Peak Rate</th><th>Off Rate</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== PRICING RULES TAB ===== -->
+    <div class="tab-content" id="pricing-rules">
+        <div class="section-card">
+            <div class="info-box">
+                <strong>Dynamic Pricing Rules</strong> — Rules are evaluated in priority order. Conditions are checked against the booking context. Actions modify component costs BEFORE service/booking charges are applied.
+            </div>
+
+            <div class="info-box-ai">
+                <strong>🤖 AI Rule Builder</strong> — Describe your pricing rule in plain English and let AI generate the structured conditions and actions for you. The AI will ask clarifying questions if your description is ambiguous.
+            </div>
+            <div class="nl-rule-container">
+                <textarea class="nl-rule-input" id="nlRuleInput" placeholder="Describe your rule in plain English, e.g. &quot;Increase hotel rate by 10% during peak season for groups of 6 or more adults&quot;"></textarea>
+                <div class="nl-rule-actions">
+                    <button type="button" class="btn btn-ai" onclick="parseNaturalLanguageRule()" id="aiParseBtn">🤖 Generate Rule from Description</button>
+                    <span id="nlRuleStatusInline" style="font-size:12px;color:#888"></span>
+                </div>
+                <div class="nl-rule-status" id="nlRuleStatus"></div>
+                <div class="clarification-box" id="clarificationBox">
+                    <strong>⚠️ Clarification Needed:</strong>
+                    <p id="clarificationQuestion"></p>
+                </div>
+                <div class="nl-rule-examples">
+                    Examples:
+                    <code>Increase hotel rate by 10% during peak season</code>
+                    <code>Decrease transport cost by 15% for groups of 6+ adults</code>
+                    <code>Add flat fee of 500 when nights >= 3</code>
+                    <code>Apply 5% margin on total for off season</code>
+                    <code>Decrease cab cost by 10% for 4+ nights</code>
+                </div>
+            </div>
+
+            <div class="section-header">Create New Rule</div>
+            <form id="ruleForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Rule Name <span class="req">*</span></label><input type="text" name="name" required id="ruleName" placeholder="Peak season surcharge"></div>
+                    <div class="form-group"><label>Entity Type</label>
+                        <select name="entity_type" id="ruleEntityType"><option value="global">Global</option><option value="hotel">Hotel</option><option value="transport">Transport</option><option value="cab">Cab</option><option value="destination">Destination</option><option value="addon">Add-on</option></select>
+                    </div>
+                    <div class="form-group"><label>Entity ID (optional)</label><input type="number" name="entity_id" id="ruleEntityId" placeholder="Leave empty for all"></div>
+                    <div class="form-group"><label>Priority (lower = first)</label><input type="number" name="priority" id="rulePriority" value="100"></div>
+                </div>
+                <div class="form-group"><label>Description</label><textarea name="description" id="ruleDescription" placeholder="What this rule does..."></textarea></div>
+                <div class="form-grid" style="margin-top:12px">
+                    <div class="form-group">
+                        <label>Conditions (JSON)</label>
+                        <textarea class="json-editor" name="conditions_json" id="ruleConditions" placeholder='{"season": "ON", "adults_gte": 4}'>{}</textarea>
+                        <small style="color:#999;margin-top:4px;display:block">Keys: season, adults_gte, adults_lte, children_gte, nights_gte, nights_lte, hotel, transport, pax_gte, region_id</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Actions (JSON)</label>
+                        <textarea class="json-editor" name="actions_json" id="ruleActions" placeholder='{"type": "increase_rate_percent", "target": "hotel", "value": 10}'>{}</textarea>
+                        <small style="color:#999;margin-top:4px;display:block">Types: increase_rate_percent, decrease_rate_percent, override_rate, add_flat_fee, apply_margin. Targets: hotel, transport, sightseeing, cab, addon, total</small>
+                    </div>
+                </div>
+                <label class="checkbox-label"><input type="checkbox" name="stackable" value="1" id="ruleStackable" checked> Stackable (can combine with other rules)</label>
+                <button type="submit" class="btn" style="margin-top:12px">Create Rule</button>
+            </form>
+        </div>
+        <div class="section-card">
+            <div class="section-header">All Pricing Rules</div>
+            <div class="table-container"><table id="rulesTable"><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Entity</th><th>Priority</th><th>Stackable</th><th>Conditions</th><th>Actions</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- ===== GLOBAL RULES TAB ===== -->
+    <div class="tab-content" id="global-rules">
+        <div class="section-card">
+            <div class="section-header">Global Pricing Configuration</div>
+            <form id="globalRulesForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Service Charge %</label><input type="number" step="0.01" name="service_charge" value="15"></div>
+                    <div class="form-group"><label>Booking Charge %</label><input type="number" step="0.01" name="booking_charge" value="12"></div>
+                    <div class="form-group"><label>Tax %</label><input type="number" step="0.01" name="tax" value="0"></div>
+                    <div class="form-group"><label>Default Margin %</label><input type="number" step="0.01" name="default_margin" value="0"></div>
+                    <div class="form-group"><label>Default Cancellation %</label><input type="number" step="0.01" name="default_cancellation" value="0"></div>
+                </div>
+                <button type="submit" class="btn" style="margin-top:12px">Save Global Rules</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal" id="editModal">
+    <div class="modal-content">
+        <div class="modal-header" id="editModalTitle">Edit</div>
+        <div id="editModalBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn" id="saveEditBtn">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let currentClientId = 1;
+let allClients=[], allRegions=[], allTransports=[], allDestinations=[], allHotels=[], allCabs=[], allAddons=[], allCabDestRates=[], allRules=[];
+let currentEditItem=null, currentEditType=null;
+let matrixPendingChanges = {};
+
+// NEW: Region type filter state
+let regionTypeFilter = 'all'; // 'all', 'domestic', 'international'
+
+// ===== TAB SWITCH =====
+document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        document.getElementById(t.dataset.tab).classList.add('active');
+    });
+});
+
+function showMsg(text, type='success') {
+    const m = document.getElementById('message');
+    m.textContent = text; m.className = `msg ${type} show`;
+    setTimeout(() => m.classList.remove('show'), 5000);
+}
+function closeModal() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('show')); }
+
+document.getElementById('sharingType').addEventListener('change', e => {
+    document.getElementById('customCapGrp').style.display = e.target.value === 'CUSTOM' ? 'block' : 'none';
+});
+
+function onClientChange() {
+    currentClientId = parseInt(document.getElementById('globalClientSelector').value);
+    loadAll();
+}
+
+function cq(url) { return url + (url.includes('?') ? '&' : '?') + `client_id=${currentClientId}`; }
+
+async function loadAll() {
+    await loadClients();
+    await Promise.all([loadRegions(), loadTransports(), loadDestinations(), loadHotels(), loadCabs(), loadAddons(), loadCabDestMatrix(), loadRules(), loadGlobalRules()]);
+}
+
+// NEW: Helper functions for region filtering
+function getRegionById(regionId) {
+    return allRegions.find(r => r.id === regionId);
+}
+
+function matchesRegionFilter(entity) {
+    if (regionTypeFilter === 'all') return true;
+    const region = getRegionById(entity.region_id);
+    if (!region) return true;
+    
+    if (regionTypeFilter === 'domestic') return region.is_domestic === true;
+    if (regionTypeFilter === 'international') return region.is_domestic === false;
+    return true;
+}
+
+function setRegionFilter(filter) {
+    regionTypeFilter = filter;
+    
+    // Update all filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    // Refresh all displays
+    displayTransports();
+    displayDestinations();
+    displayHotels();
+    displayCabs();
+    displayAddons();
+}
+
+// ===== CLIENTS =====
+async function loadClients() {
+    try {
+        const res = await fetch(`${API}/api/clients`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allClients = await res.json();
+        displayClients();
+        const sel = document.getElementById('globalClientSelector');
+        sel.innerHTML = allClients.map(c => `<option value="${c.id}" ${c.id===currentClientId?'selected':''}>${c.name}</option>`).join('');
+    } catch (e) {
+        console.error('Load clients error:', e);
+        showMsg('Failed to load clients', 'error');
+    }
+}
+
+function displayClients() {
+    const tb = document.querySelector('#clientsTable tbody');
+    tb.innerHTML = allClients.map(c => `<tr class="${c.active?'':'inactive'}">
+        <td>${c.id}</td><td>${c.name}</td><td>${c.code}</td><td>${c.contact_email||'-'}</td><td>${c.currency_default}</td>
+        <td><span class="badge ${c.active?'badge-active':'badge-inactive'}">${c.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${c.active?'checked':''} onchange="toggleEntity('clients',${c.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm" onclick="editClient(${c.id})">Edit</button>
+            ${c.id!==1?`<button class="btn btn-sm btn-danger" onclick="deleteEntity('clients',${c.id})">Del</button>`:''}
+        </div></td></tr>`).join('');
+}
+
+document.getElementById('clientForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d = Object.fromEntries(new FormData(e.target));
+        const res = await fetch(`${API}/api/clients`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Client created');e.target.reset();await loadClients();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create client error:', e);
+        showMsg('Failed to create client', 'error');
+    }
+});
+
+function editClient(id) {
+    const c = allClients.find(x=>x.id===id); currentEditItem=c; currentEditType='client';
+    document.getElementById('editModalBody').innerHTML = `
+        <div class="form-grid">
+            <div class="form-group"><label>Name</label><input type="text" id="editName" value="${c.name}"></div>
+            <div class="form-group"><label>Code</label><input type="text" id="editCode" value="${c.code}"></div>
+            <div class="form-group"><label>Email</label><input type="email" id="editEmail" value="${c.contact_email||''}"></div>
+            <div class="form-group"><label>Phone</label><input type="text" id="editPhone" value="${c.contact_phone||''}"></div>
+            <div class="form-group"><label>Currency</label><input type="text" id="editCurrency" value="${c.currency_default}"></div>
+        </div>`;
+    document.getElementById('editModalTitle').textContent='Edit Client';
+    document.getElementById('editModal').classList.add('show');
+}
+
+async function toggleEntity(type, id, active) {
+    try {
+        const res = await fetch(`${API}/api/${type}/${id}/toggle`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active})});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showMsg('Status updated');
+        loadAll();
+    } catch (e) {
+        console.error('Toggle error:', e);
+        showMsg('Failed to toggle status', 'error');
+        loadAll();
+    }
+}
+
+async function deleteEntity(type, id) {
+    if(!confirm('Delete this item?')) return;
+    try {
+        const res = await fetch(`${API}/api/${type}/${id}`, {method:'DELETE'});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showMsg('Deleted');
+        loadAll();
+    } catch (e) {
+        console.error('Delete error:', e);
+        showMsg('Failed to delete', 'error');
+        loadAll();
+    }
+}
+
+// ===== REGIONS (FIXED WITH DOMESTIC/INTERNATIONAL SEPARATION) =====
+async function loadRegions() {
+    try {
+        const res = await fetch(cq(`${API}/api/regions`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allRegions = await res.json();
+        displayRegions();
+        updateRegionSelects();
+    } catch (e) {
+        console.error('Load regions error:', e);
+        showMsg('Failed to load regions', 'error');
+    }
+}
+
+function displayRegions() {
+    const domesticRegions = allRegions.filter(r => r.is_domestic === true);
+    const internationalRegions = allRegions.filter(r => r.is_domestic === false);
+    
+    const domTb = document.querySelector('#domesticRegionsTable tbody');
+    if (domesticRegions.length === 0) {
+        domTb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No domestic regions yet</td></tr>';
+    } else {
+        domTb.innerHTML = domesticRegions.map(r => renderRegionRow(r)).join('');
+    }
+    
+    const intlTb = document.querySelector('#internationalRegionsTable tbody');
+    if (internationalRegions.length === 0) {
+        intlTb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No international regions yet</td></tr>';
+    } else {
+        intlTb.innerHTML = internationalRegions.map(r => renderRegionRow(r)).join('');
+    }
+}
+
+function renderRegionRow(r) {
+    return `<tr class="${r.active?'':'inactive'}">
+        <td>${r.id}</td><td>${r.name}</td><td>${r.currency}</td><td>${r.service_percent}%</td><td>${r.booking_percent}%</td>
+        <td><span class="badge ${r.active?'badge-active':'badge-inactive'}">${r.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${r.active?'checked':''} onchange="toggleEntity('regions',${r.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm" onclick="editRegion(${r.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('regions',${r.id})">Del</button>
+        </div></td></tr>`;
+}
+
+function updateRegionSelects() {
+    ['transportRegion','destRegion','hotelRegion','cabRegion','addonRegion'].forEach(id => {
+        const s=document.getElementById(id); if(!s) return;
+        const v=s.value; 
+        s.innerHTML='<option value="">Select Region</option>'+allRegions.filter(r=>r.active).map(r=>`<option value="${r.id}">${r.name} ${r.is_domestic?'🇮🇳':'🌎'}</option>`).join('');
+        if(v) s.value=v;
+    });
+}
+
+document.getElementById('regionForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const fd=new FormData(e.target);
+        const d=Object.fromEntries(fd);
+        d.client_id=currentClientId;
+        const res=await fetch(`${API}/api/regions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Region created');e.target.reset();await loadRegions();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create region error:', e);
+        showMsg('Failed to create region', 'error');
+    }
+});
+
+function editRegion(id) {
+    const r=allRegions.find(x=>x.id===id); currentEditItem=r; currentEditType='region';
+    document.getElementById('editModalBody').innerHTML = `<div class="form-grid">
+        <div class="form-group"><label>Name</label><input type="text" id="editName" value="${r.name}"></div>
+        <div class="form-group"><label>Currency</label><input type="text" id="editCurrency" value="${r.currency}"></div>
+        <div class="form-group"><label>Region Type</label>
+            <select id="editRegionType">
+                <option value="true" ${r.is_domestic?'selected':''}>Domestic</option>
+                <option value="false" ${!r.is_domestic?'selected':''}>International</option>
+            </select>
+        </div>
+        <div class="form-group"><label>Service %</label><input type="number" step="0.01" id="editSP" value="${r.service_percent}"></div>
+        <div class="form-group"><label>Booking %</label><input type="number" step="0.01" id="editBP" value="${r.booking_percent}"></div>
+    </div>`;
+    document.getElementById('editModalTitle').textContent='Edit Region';
+    document.getElementById('editModal').classList.add('show');
+}
+
+// ===== TRANSPORTS (FIXED WITH FILTERING) =====
+async function loadTransports() {
+    try {
+        const res=await fetch(cq(`${API}/api/transports`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allTransports=await res.json();
+        displayTransports();
+    } catch (e) {
+        console.error('Load transports error:', e);
+        showMsg('Failed to load transports', 'error');
+    }
+}
+
+function displayTransports() {
+    const filtered = allTransports.filter(t => matchesRegionFilter(t));
+    const tb=document.querySelector('#transportsTable tbody');
+    
+    if (filtered.length === 0) {
+        tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999;padding:24px">No transports found for selected filter</td></tr>';
+        return;
+    }
+    
+    tb.innerHTML=filtered.map(t=>{
+        const r=getRegionById(t.region_id);
+        const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
+        return `<tr class="${t.active?'':'inactive'}">
+        <td>${t.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${t.name}</td>
+        <td>${t.adult_rate_peak}</td><td>${t.child_rate_peak}</td><td>${t.peak_pricing_type||'per_person'}</td>
+        <td>${t.adult_rate_off}</td><td>${t.child_rate_off}</td><td>${t.off_pricing_type||'per_person'}</td>
+        <td><span class="badge ${t.active?'badge-active':'badge-inactive'}">${t.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${t.active?'checked':''} onchange="toggleEntity('transports',${t.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('transports',${t.id})">Del</button>
+        </div></td></tr>`;
+    }).join('');
+}
+
+document.getElementById('transportForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d=Object.fromEntries(new FormData(e.target)); d.client_id=currentClientId;
+        const res=await fetch(`${API}/api/transports`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Transport created');e.target.reset();await loadTransports();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create transport error:', e);
+        showMsg('Failed to create transport', 'error');
+    }
+});
+
+// ===== DESTINATIONS (WITH FILTERING) =====
+async function loadDestinations() {
+    try {
+        const res=await fetch(cq(`${API}/api/destinations`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allDestinations=await res.json();
+        displayDestinations();
+    } catch (e) {
+        console.error('Load destinations error:', e);
+        showMsg('Failed to load destinations', 'error');
+    }
+}
+
+function displayDestinations() {
+    const filtered = allDestinations.filter(d => matchesRegionFilter(d));
+    const tb=document.querySelector('#destinationsTable tbody');
+    
+    if (filtered.length === 0) {
+        tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">No destinations found for selected filter</td></tr>';
+        return;
+    }
+    
+    tb.innerHTML=filtered.map(d=>{
+        const r=getRegionById(d.region_id);
+        const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
+        return `<tr class="${d.active?'':'inactive'}">
+        <td>${d.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${d.name}</td><td>${d.base_rate}</td><td>${d.per_day_rate}</td>
+        <td>${d.is_special?'<span class="badge badge-domestic">Special</span>':'-'}</td>
+        <td><span class="badge ${d.active?'badge-active':'badge-inactive'}">${d.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${d.active?'checked':''} onchange="toggleEntity('destinations',${d.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('destinations',${d.id})">Del</button>
+        </div></td></tr>`;
+    }).join('');
+}
+
+document.getElementById('destinationForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const fd=new FormData(e.target); const d=Object.fromEntries(fd);
+        d.is_special=fd.get('is_special')?1:0; d.client_id=currentClientId;
+        const res=await fetch(`${API}/api/destinations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Destination created');e.target.reset();await loadDestinations();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create destination error:', e);
+        showMsg('Failed to create destination', 'error');
+    }
+});
+
+// ===== HOTELS (WITH FILTERING) =====
+async function loadHotels() {
+    try {
+        const res=await fetch(cq(`${API}/api/hotels`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allHotels=await res.json();
+        displayHotels();
+    } catch (e) {
+        console.error('Load hotels error:', e);
+        showMsg('Failed to load hotels', 'error');
+    }
+}
+
+function displayHotels() {
+    const filtered = allHotels.filter(h => matchesRegionFilter(h));
+    const tb=document.querySelector('#hotelsTable tbody');
+    
+    if (filtered.length === 0) {
+        tb.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;padding:24px">No hotels found for selected filter</td></tr>';
+        return;
+    }
+    
+    tb.innerHTML=filtered.map(h=>{
+        const r=getRegionById(h.region_id);
+        const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
+        let sh=h.sharing_type; 
+        if(sh==='CUSTOM'&&h.custom_sharing_name)sh=`${h.custom_sharing_name}(${h.sharing_capacity})`;
+        else if(sh==='DOUBLE')sh='Double(2)'; 
+        else if(sh==='QUAD')sh='Quad(4)';
+        return `<tr class="${h.active?'':'inactive'}">
+        <td>${h.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${h.name}</td><td>${sh}</td>
+        <td>${h.adult_rate_peak}</td><td>${h.child_rate_peak}</td><td>${h.adult_rate_off}</td><td>${h.child_rate_off}</td>
+        <td><span class="badge ${h.active?'badge-active':'badge-inactive'}">${h.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${h.active?'checked':''} onchange="toggleEntity('hotels',${h.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('hotels',${h.id})">Del</button>
+        </div></td></tr>`;
+    }).join('');
+}
+
+document.getElementById('hotelForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d=Object.fromEntries(new FormData(e.target)); d.client_id=currentClientId;
+        const res=await fetch(`${API}/api/hotels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Hotel created');e.target.reset();await loadHotels();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create hotel error:', e);
+        showMsg('Failed to create hotel', 'error');
+    }
+});
+
+// ===== CABS (WITH FILTERING) =====
+async function loadCabs() {
+    try {
+        const res=await fetch(cq(`${API}/api/cabs`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allCabs=await res.json();
+        displayCabs();
+    } catch (e) {
+        console.error('Load cabs error:', e);
+        showMsg('Failed to load cabs', 'error');
+    }
+}
+
+function displayCabs() {
+    const filtered = allCabs.filter(c => matchesRegionFilter(c));
+    const tb=document.querySelector('#cabsTable tbody');
+    
+    if (filtered.length === 0) {
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No cabs found for selected filter</td></tr>';
+        return;
+    }
+    
+    tb.innerHTML=filtered.map(c=>{
+        const r=getRegionById(c.region_id);
+        const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
+        return `<tr class="${c.active?'':'inactive'}">
+        <td>${c.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${c.name}</td><td>${c.base_rate}</td><td>${c.per_day_rate}</td>
+        <td><span class="badge ${c.active?'badge-active':'badge-inactive'}">${c.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${c.active?'checked':''} onchange="toggleEntity('cabs',${c.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('cabs',${c.id})">Del</button>
+        </div></td></tr>`;
+    }).join('');
+}
+
+document.getElementById('cabForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d=Object.fromEntries(new FormData(e.target)); d.client_id=currentClientId;
+        const res=await fetch(`${API}/api/cabs`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Cab created');e.target.reset();await loadCabs();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create cab error:', e);
+        showMsg('Failed to create cab', 'error');
+    }
+});
+
+// ===== CAB-DEST MATRIX =====
+let matrixData = null;
+
+async function loadCabDestMatrix() {
+    try {
+        const res = await fetch(cq(`${API}/api/cab-destination-matrix`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        matrixData = await res.json();
+        matrixPendingChanges = {};
+        renderMatrix();
+        updateCDRDropdowns();
+    } catch(e) {
+        console.error('Matrix load error:', e);
+        showMsg('Failed to load matrix', 'error');
+        document.getElementById('matrixContainer').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div>Failed to load matrix</div>';
+    }
+}
+
+function updateCDRDropdowns() {
+    const cabSel = document.getElementById('cdrCab');
+    const destSel = document.getElementById('cdrDest');
+    if (matrixData) {
+        cabSel.innerHTML = '<option value="">Select Cab</option>' + (matrixData.cabs||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        destSel.innerHTML = '<option value="">Select Destination</option>' + (matrixData.destinations||[]).map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    }
+}
+
+function renderMatrix() {
+    const container = document.getElementById('matrixContainer');
+    if (!matrixData || !matrixData.cabs || !matrixData.destinations || !matrixData.cabs.length || !matrixData.destinations.length) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🚗🏔️</div>No cabs or destinations found</div>';
+        return;
+    }
+
+    const cabs = matrixData.cabs;
+    const dests = matrixData.destinations;
+    const ratesMap = {};
+    (matrixData.matrix || []).forEach(m => {
+        ratesMap[`${m.cab_id}_${m.destination_id}`] = m;
+    });
+
+    let html = '<table class="matrix-table"><thead><tr><th class="cab-name">Cab \\ Destination</th>';
+    dests.forEach(d => {
+        html += `<th title="${d.name}">${d.name.length > 15 ? d.name.substring(0,14)+'…' : d.name}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    cabs.forEach(cab => {
+        html += `<tr><td class="cab-name">${cab.name}</td>`;
+        dests.forEach(dest => {
+            const key = `${cab.id}_${dest.id}`;
+            const entry = ratesMap[key];
+            const currentRate = entry ? (entry.override_rate !== null && entry.override_rate !== undefined ? entry.override_rate : entry.rate) : 0;
+            const displayRate = currentRate || 0;
+            const hasRecord = entry && entry.has_record;
+            html += `<td>
+                <input type="number" step="0.01" class="matrix-rate-input ${hasRecord ? '' : ''}"
+                    id="mr_${key}" value="${displayRate}"
+                    data-cab="${cab.id}" data-dest="${dest.id}" data-original="${displayRate}"
+                    onchange="onMatrixCellChange('${key}', this)" onfocus="this.select()">
+            </td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    updateMatrixSaveBar();
+}
+
+function onMatrixCellChange(key, input) {
+    const original = parseFloat(input.dataset.original) || 0;
+    const current = parseFloat(input.value) || 0;
+
+    if (Math.abs(current - original) > 0.001) {
+        input.classList.add('modified');
+        matrixPendingChanges[key] = {
+            cab_id: parseInt(input.dataset.cab),
+            destination_id: parseInt(input.dataset.dest),
+            rate: current,
+            override_rate: current
+        };
+    } else {
+        input.classList.remove('modified');
+        delete matrixPendingChanges[key];
+    }
+    updateMatrixSaveBar();
+}
+
+function updateMatrixSaveBar() {
+    const bar = document.getElementById('matrixSaveBar');
+    const count = Object.keys(matrixPendingChanges).length;
+    document.getElementById('matrixChangesCount').textContent = `${count} unsaved change${count!==1?'s':''}`;
+    bar.style.display = count > 0 ? 'flex' : 'none';
+}
+
+async function saveMatrixChanges() {
+    const changes = Object.values(matrixPendingChanges);
+    if (!changes.length) return;
+
+    let saved = 0;
+    for (const change of changes) {
+        try {
+            const res = await fetch(`${API}/api/cab-destination-rates`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    client_id: currentClientId,
+                    cab_id: change.cab_id,
+                    destination_id: change.destination_id,
+                    rate: change.rate,
+                    override_rate: change.override_rate
+                })
+            });
+            if (res.ok) saved++;
+        } catch(e) { console.error('Save rate error:', e); }
+    }
+
+    showMsg(`Saved ${saved} rate${saved!==1?'s':''}`);
+    matrixPendingChanges = {};
+    await loadCabDestMatrix();
+}
+
+function discardMatrixChanges() {
+    matrixPendingChanges = {};
+    renderMatrix();
+}
+
+document.getElementById('cabDestRateForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d = Object.fromEntries(new FormData(e.target));
+        if (!d.cab_id || !d.destination_id) { showMsg('Select cab and destination', 'error'); return; }
+        d.client_id = currentClientId;
+        d.rate = parseFloat(d.rate) || 0;
+        d.override_rate = d.override_rate ? parseFloat(d.override_rate) : d.rate;
+        const res = await fetch(`${API}/api/cab-destination-rates`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
+        if(res.ok){ showMsg('Rate saved'); await loadCabDestMatrix(); } else { showMsg('Failed','error'); }
+    } catch (e) {
+        console.error('Save rate error:', e);
+        showMsg('Failed to save rate', 'error');
+    }
+});
+
+// ===== ADDONS (FIXED WITH FILTERING) =====
+async function loadAddons() {
+    try {
+        const res=await fetch(cq(`${API}/api/addons`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allAddons=await res.json();
+        displayAddons();
+    } catch (e) {
+        console.error('Load addons error:', e);
+        showMsg('Failed to load addons', 'error');
+    }
+}
+
+function displayAddons() {
+    const filtered = allAddons.filter(a => matchesRegionFilter(a));
+    const tb=document.querySelector('#addonsTable tbody');
+    
+    if (filtered.length === 0) {
+        tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:24px">No add-ons found for selected filter</td></tr>';
+        return;
+    }
+    
+    tb.innerHTML=filtered.map(a=>{
+        const r=getRegionById(a.region_id);
+        const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
+        return `<tr class="${a.active?'':'inactive'}">
+        <td>${a.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${a.name}</td><td>${a.addon_type||'-'}</td><td>${a.pricing_type}</td>
+        <td>${a.rate_peak||0}</td><td>${a.rate_off||0}</td>
+        <td><span class="badge ${a.active?'badge-active':'badge-inactive'}">${a.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${a.active?'checked':''} onchange="toggleEntity('addons',${a.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('addons',${a.id})">Del</button>
+        </div></td></tr>`;
+    }).join('');
+}
+
+document.getElementById('addonForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const fd = new FormData(e.target);
+        const d = Object.fromEntries(fd);
+        d.client_id = currentClientId;
+        d.rate_peak = parseFloat(d.rate_peak) || 0;
+        d.rate_off = parseFloat(d.rate_off) || 0;
+        const res = await fetch(`${API}/api/addons`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
+        if(res.ok){ showMsg('Add-on created'); e.target.reset(); await loadAddons(); }
+        else { const err = await res.json(); showMsg(err.error || 'Failed', 'error'); }
+    } catch (e) {
+        console.error('Create addon error:', e);
+        showMsg('Failed to create add-on', 'error');
+    }
+});
+
+// ===== PRICING RULES =====
+async function loadRules() {
+    try {
+        const res=await fetch(cq(`${API}/api/pricing-rules`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        allRules=await res.json();
+        displayRules();
+    } catch (e) {
+        console.error('Load rules error:', e);
+        showMsg('Failed to load rules', 'error');
+    }
+}
+
+function displayRules() {
+    const tb=document.querySelector('#rulesTable tbody');
+    tb.innerHTML=allRules.map(r=>{
+        const cond=typeof r.conditions_json==='string'?r.conditions_json:JSON.stringify(r.conditions_json);
+        const act=typeof r.actions_json==='string'?r.actions_json:JSON.stringify(r.actions_json);
+        return `<tr class="${r.active?'':'inactive'}">
+        <td>${r.id}</td><td>${r.name}</td><td>${r.entity_type}</td><td>${r.entity_id||'All'}</td>
+        <td>${r.priority}</td><td>${r.stackable?'Yes':'No'}</td>
+        <td><code style="font-size:10px;word-break:break-all">${cond}</code></td>
+        <td><code style="font-size:10px;word-break:break-all">${act}</code></td>
+        <td><span class="badge ${r.active?'badge-active':'badge-inactive'}">${r.active?'Active':'Inactive'}</span></td>
+        <td><div class="actions">
+            <label class="toggle-switch"><input type="checkbox" ${r.active?'checked':''} onchange="toggleEntity('pricing-rules',${r.id},this.checked)"><span class="toggle-slider"></span></label>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('pricing-rules',${r.id})">Del</button>
+        </div></td></tr>`;
+    }).join('') || '<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">📐</div>No rules</td></tr>';
+}
+
+document.getElementById('ruleForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d=Object.fromEntries(new FormData(e.target));
+        d.client_id=currentClientId;
+        d.stackable=d.stackable?true:false;
+        d.entity_id=d.entity_id?parseInt(d.entity_id):null;
+        try{d.conditions_json=JSON.parse(d.conditions_json);}catch{showMsg('Invalid conditions JSON','error');return;}
+        try{d.actions_json=JSON.parse(d.actions_json);}catch{showMsg('Invalid actions JSON','error');return;}
+        const res=await fetch(`${API}/api/pricing-rules`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Rule created');e.target.reset();document.getElementById('ruleConditions').value='{}';document.getElementById('ruleActions').value='{}';await loadRules();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+    } catch (e) {
+        console.error('Create rule error:', e);
+        showMsg('Failed to create rule', 'error');
+    }
+});
+
+// ===== AI RULE PARSER =====
+async function parseNaturalLanguageRule() {
+    const input = document.getElementById('nlRuleInput');
+    const statusDiv = document.getElementById('nlRuleStatus');
+    const statusInline = document.getElementById('nlRuleStatusInline');
+    const clarBox = document.getElementById('clarificationBox');
+    const clarQuestion = document.getElementById('clarificationQuestion');
+    const btn = document.getElementById('aiParseBtn');
+    const text = input.value.trim();
+
+    if (!text) { showMsg('Please describe your rule first', 'error'); return; }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Parsing...';
+    statusInline.textContent = 'Processing...';
+    statusDiv.classList.remove('show', 'success', 'error', 'warning');
+    clarBox.classList.remove('show');
+
+    try {
+        const res = await fetch(`${API}/api/ai-parse-rule`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+
+        btn.disabled = false;
+        btn.textContent = '🤖 Generate Rule from Description';
+        statusInline.textContent = '';
+
+        if (data.needs_clarification) {
+            statusDiv.className = 'nl-rule-status show warning';
+            statusDiv.textContent = '⚠️ Needs clarification - please provide more details';
+            clarBox.classList.add('show');
+            clarQuestion.textContent = data.clarification_question || 'Please provide more specific details.';
+            showMsg('Rule needs clarification', 'warning');
+            return;
+        }
+
+        if (data.error && !data.name) {
+            statusDiv.className = 'nl-rule-status show error';
+            statusDiv.textContent = '❌ Could not parse. Try rephrasing.';
+            showMsg('Could not parse rule', 'error');
+            return;
+        }
+
+        document.getElementById('ruleName').value = data.name || text.substring(0, 200);
+        document.getElementById('ruleDescription').value = data.description || text;
+        document.getElementById('ruleEntityType').value = data.entity_type || 'global';
+        document.getElementById('ruleEntityId').value = data.entity_id || '';
+        document.getElementById('rulePriority').value = data.priority || 100;
+        document.getElementById('ruleStackable').checked = data.stackable !== false;
+
+        const conditionsStr = JSON.stringify(data.conditions_json || {}, null, 2);
+        const actionsStr = JSON.stringify(data.actions_json || {}, null, 2);
+        document.getElementById('ruleConditions').value = conditionsStr;
+        document.getElementById('ruleActions').value = actionsStr;
+
+        const hasConditions = Object.keys(data.conditions_json || {}).length > 0;
+        const hasActions = Object.keys(data.actions_json || {}).length > 0;
+
+        if (hasConditions && hasActions) {
+            statusDiv.className = 'nl-rule-status show success';
+            statusDiv.textContent = '✅ Rule parsed successfully! Review and click "Create Rule".';
+            showMsg('Rule generated successfully', 'success');
+        } else if (hasActions && !hasConditions) {
+            statusDiv.className = 'nl-rule-status show warning';
+            statusDiv.textContent = '⚠️ Partial parse — actions found but no conditions.';
+            showMsg('Partial parse - add conditions manually', 'warning');
+        } else {
+            statusDiv.className = 'nl-rule-status show warning';
+            statusDiv.textContent = '⚠️ Could not fully parse. Adjust manually.';
+            showMsg('Partial parse - review fields', 'warning');
+        }
+    } catch(e) {
+        btn.disabled = false;
+        btn.textContent = '🤖 Generate Rule from Description';
+        statusInline.textContent = '';
+        statusDiv.className = 'nl-rule-status show error';
+        statusDiv.textContent = '❌ Error: ' + e.message;
+        showMsg('Error parsing rule', 'error');
+    }
+}
+
+// ===== GLOBAL RULES =====
+async function loadGlobalRules() {
+    try {
+        const res=await fetch(cq(`${API}/api/global-rules`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rules=await res.json();
+        if(rules&&rules.service_charge!==undefined){
+            document.querySelector('#globalRulesForm [name="service_charge"]').value=rules.service_charge;
+            document.querySelector('#globalRulesForm [name="booking_charge"]').value=rules.booking_charge;
+            document.querySelector('#globalRulesForm [name="tax"]').value=rules.tax||0;
+            document.querySelector('#globalRulesForm [name="default_margin"]').value=rules.default_margin||0;
+            document.querySelector('#globalRulesForm [name="default_cancellation"]').value=rules.default_cancellation||0;
+        }
+    } catch (e) {
+        console.error('Load global rules error:', e);
+    }
+}
+
+document.getElementById('globalRulesForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        const d=Object.fromEntries(new FormData(e.target)); d.client_id=currentClientId;
+        const res=await fetch(`${API}/api/global-rules`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+        if(res.ok){showMsg('Global rules saved');await loadGlobalRules();}else showMsg('Failed','error');
+    } catch (e) {
+        console.error('Save global rules error:', e);
+        showMsg('Failed to save global rules', 'error');
+    }
+});
+
+// ===== SAVE EDIT HANDLER =====
+document.getElementById('saveEditBtn').addEventListener('click', async () => {
+    try {
+        if(currentEditType==='client'){
+            const d={name:document.getElementById('editName').value,code:document.getElementById('editCode').value,
+                contact_email:document.getElementById('editEmail').value,contact_phone:document.getElementById('editPhone').value,
+                currency_default:document.getElementById('editCurrency').value};
+            await fetch(`${API}/api/clients/${currentEditItem.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+            showMsg('Client updated');closeModal();await loadClients();
+        } else if(currentEditType==='region'){
+            const d={name:document.getElementById('editName').value,currency:document.getElementById('editCurrency').value,
+                service_percent:parseFloat(document.getElementById('editSP').value),
+                booking_percent:parseFloat(document.getElementById('editBP').value),
+                is_domestic:document.getElementById('editRegionType').value};
+            await fetch(`${API}/api/regions/${currentEditItem.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+            showMsg('Region updated');closeModal();await loadRegions();
+        }
+    } catch (e) {
+        console.error('Save edit error:', e);
+        showMsg('Failed to save changes', 'error');
+    }
+});
+
+// ===== INIT =====
+(async()=>{await loadAll();})();
+</script>
+</body>
+</html>
