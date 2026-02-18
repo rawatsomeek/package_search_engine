@@ -16,9 +16,8 @@ CREATE TABLE IF NOT EXISTS clients (
     active BOOLEAN NOT NULL DEFAULT TRUE,
     deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(name, deleted) WHERE deleted = FALSE,
-    UNIQUE(code, deleted) WHERE deleted = FALSE
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    
 );
 
 INSERT INTO clients (id, name, code, currency_default) VALUES
