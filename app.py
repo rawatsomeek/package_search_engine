@@ -33,6 +33,7 @@ from flask_cors import CORS
 from functools import wraps
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import urllib.parse
 import json
 import os
 import logging
@@ -62,13 +63,30 @@ CORS(app)
 # DATABASE
 # =====================================================
 
-DB_CONFIG = {
-    'host': os.environ.get('DB_HOST', 'localhost'),
-    'port': int(os.environ.get('DB_PORT', 5432)),
-    'database': os.environ.get('DB_NAME', 'travel_pricing'),
-    'user': os.environ.get('DB_USER', 'apoorvaranjan'),
-    'password': os.environ.get('DB_PASS', ''),
-}
+import urllib.parse
+import os
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    result = urllib.parse.urlparse(DATABASE_URL)
+
+    DB_CONFIG = {
+        'host': result.hostname,
+        'port': result.port,
+        'database': result.path[1:],
+        'user': result.username,
+        'password': result.password,
+    }
+else:
+    DB_CONFIG = {
+        'host': 'localhost',
+        'port': 5432,
+        'database': 'travel_pricing',
+        'user': 'postgres',
+        'password': '',
+    }
+
 
 
 def get_db():
@@ -3635,5 +3653,6 @@ def index():
 # ENTRY POINT
 # =====================================================
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
