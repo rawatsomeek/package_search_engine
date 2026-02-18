@@ -33,7 +33,6 @@ from flask_cors import CORS
 from functools import wraps
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import urllib.parse
 import json
 import os
 import logging
@@ -63,25 +62,17 @@ CORS(app)
 # DATABASE
 # =====================================================
 
-import urllib.parse
-import os
+DB_CONFIG = {
+    'host': os.environ.get('DB_HOST', 'localhost'),
+    'port': int(os.environ.get('DB_PORT', 5432)),
+    'database': os.environ.get('DB_NAME', 'travel_pricing'),
+    'user': os.environ.get('DB_USER', 'apoorvaranjan'),
+    'password': os.environ.get('DB_PASS', ''),
+}
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
-    if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL, sslmode="require")
-    else:
-        return psycopg2.connect(
-            host='localhost',
-            port=5432,
-            database='travel_pricing',
-            user='postgres',
-            password=''
-        )
-
-
-
+    return psycopg2.connect(**DB_CONFIG)
 
 
 def row_to_dict(cursor, row):
@@ -3645,5 +3636,5 @@ def index():
 # =====================================================
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
