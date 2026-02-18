@@ -82,8 +82,6 @@ def get_db():
 
 
 
-def get_db():
-    return psycopg2.connect(**DB_CONFIG)
 
 
 def row_to_dict(cursor, row):
