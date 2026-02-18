@@ -62,17 +62,13 @@ CORS(app)
 # DATABASE
 # =====================================================
 
-DB_CONFIG = {
-    'host': os.environ.get('DB_HOST', 'localhost'),
-    'port': int(os.environ.get('DB_PORT', 5432)),
-    'database': os.environ.get('DB_NAME', 'travel_pricing'),
-    'user': os.environ.get('DB_USER', 'apoorvaranjan'),
-    'password': os.environ.get('DB_PASS', ''),
-}
-
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
-    return psycopg2.connect(**DB_CONFIG)
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL not set in environment variables")
+    return psycopg2.connect(DATABASE_URL)
+
 
 
 def row_to_dict(cursor, row):
