@@ -68,24 +68,17 @@ import os
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-if DATABASE_URL:
-    result = urllib.parse.urlparse(DATABASE_URL)
-
-    DB_CONFIG = {
-        'host': result.hostname,
-        'port': result.port,
-        'database': result.path[1:],
-        'user': result.username,
-        'password': result.password,
-    }
-else:
-    DB_CONFIG = {
-        'host': 'localhost',
-        'port': 5432,
-        'database': 'travel_pricing',
-        'user': 'postgres',
-        'password': '',
-    }
+def get_db():
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL, sslmode="require")
+    else:
+        return psycopg2.connect(
+            host='localhost',
+            port=5432,
+            database='travel_pricing',
+            user='postgres',
+            password=''
+        )
 
 
 

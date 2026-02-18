@@ -2,109 +2,280 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>Admin Panel — Enterprise Travel Pricing</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f7fa;min-height:100vh}
-        .header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:16px 32px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.1);position:sticky;top:0;z-index:100}
-        .header h1{font-size:22px}
-        .header-right{display:flex;gap:12px;align-items:center}
-        .client-selector{padding:8px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+        html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f7fa;min-height:100vh;overflow-x:hidden}
+
+        /* ===== HEADER ===== */
+        .header{
+            background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;
+            padding:14px 20px;display:flex;justify-content:space-between;align-items:center;
+            box-shadow:0 2px 10px rgba(0,0,0,.1);position:sticky;top:0;z-index:100;
+            flex-wrap:wrap;gap:10px;
+        }
+        .header h1{font-size:clamp(14px,3vw,22px);white-space:nowrap}
+        .header-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+        .client-selector{
+            padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,.3);
+            background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;
+            cursor:pointer;min-height:38px;-webkit-appearance:none;appearance:none;
+        }
         .client-selector option{color:#333;background:#fff}
-        .btn-logout{padding:8px 18px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;text-decoration:none;transition:.3s}
+        .btn-logout{
+            padding:8px 16px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);
+            color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;
+            text-decoration:none;transition:.3s;white-space:nowrap;min-height:38px;
+            display:inline-flex;align-items:center;
+        }
         .btn-logout:hover{background:rgba(255,255,255,.3)}
-        .container{max-width:1600px;margin:30px auto;padding:0 32px}
-        .tabs{display:flex;gap:8px;margin-bottom:24px;background:#fff;padding:12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);flex-wrap:wrap}
-        .tab{padding:10px 20px;cursor:pointer;background:#f8f9fa;border:none;border-radius:6px;font-size:13px;font-weight:600;transition:.3s;color:#666}
+
+        /* ===== CONTAINER ===== */
+        .container{max-width:1600px;margin:20px auto;padding:0 16px}
+
+        /* ===== TABS ===== */
+        .tabs{
+            display:flex;gap:6px;margin-bottom:20px;background:#fff;padding:10px;
+            border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);
+            flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+        }
+        .tab{
+            padding:9px 14px;cursor:pointer;background:#f8f9fa;border:none;border-radius:6px;
+            font-size:12px;font-weight:600;transition:.3s;color:#666;white-space:nowrap;
+            min-height:36px;-webkit-tap-highlight-color:transparent;flex-shrink:0;
+        }
         .tab.active{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;box-shadow:0 4px 12px rgba(102,126,234,.3)}
         .tab:hover:not(.active){background:#e9ecef}
         .tab-content{display:none}.tab-content.active{display:block;animation:fadeIn .3s}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        .section-card{background:#fff;padding:24px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);margin-bottom:24px}
-        .section-header{font-size:18px;font-weight:700;color:#333;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #f0f0f0}
-        .region-section-divider{margin:32px 0 16px 0;padding:16px;background:linear-gradient(135deg,rgba(102,126,234,.1),rgba(118,75,162,.1));border-radius:8px;border-left:4px solid #667eea}
-        .region-section-title{font-size:20px;font-weight:700;color:#667eea;display:flex;align-items:center;gap:8px}
-        .filter-buttons{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-        .filter-btn{padding:8px 16px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:.3s;color:#666}
+
+        /* ===== CARDS ===== */
+        .section-card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);margin-bottom:20px}
+        .section-header{font-size:clamp(14px,3vw,18px);font-weight:700;color:#333;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #f0f0f0}
+
+        /* ===== REGION SECTIONS ===== */
+        .region-section-divider{margin:24px 0 14px;padding:14px;background:linear-gradient(135deg,rgba(102,126,234,.1),rgba(118,75,162,.1));border-radius:8px;border-left:4px solid #667eea}
+        .region-section-title{font-size:clamp(15px,3vw,20px);font-weight:700;color:#667eea;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+        /* ===== FILTER BUTTONS ===== */
+        .filter-buttons{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+        .filter-btn{
+            padding:7px 14px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;
+            cursor:pointer;font-size:12px;font-weight:600;transition:.3s;color:#666;
+            min-height:34px;-webkit-tap-highlight-color:transparent;
+        }
         .filter-btn.active{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:#667eea}
         .filter-btn:hover:not(.active){background:#e9ecef}
-        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:20px}
+
+        /* ===== FORMS ===== */
+        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:18px}
         .form-group{display:flex;flex-direction:column}
-        .form-group label{font-size:12px;font-weight:600;color:#555;margin-bottom:6px}
+        .form-group label{font-size:12px;font-weight:600;color:#555;margin-bottom:5px}
         .form-group label .req{color:#e74c3c}
-        .form-group input,.form-group select,.form-group textarea{padding:10px 12px;border:2px solid #e0e0e0;border-radius:6px;font-size:13px;transition:.3s;font-family:inherit}
-        .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+        .form-group input,.form-group select,.form-group textarea{
+            padding:9px 11px;border:2px solid #e0e0e0;border-radius:6px;font-size:13px;
+            transition:.3s;font-family:inherit;min-height:40px;width:100%;
+            -webkit-appearance:none;appearance:none;
+        }
+        .form-group input:focus,.form-group select:focus,.form-group textarea:focus{
+            outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)
+        }
         textarea{min-height:60px;resize:vertical}
-        .checkbox-label{display:flex;align-items:center;font-size:13px;color:#555;cursor:pointer;gap:6px;margin-top:6px}
-        .btn{padding:10px 24px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:.3s}
+        .checkbox-label{display:flex;align-items:center;font-size:13px;color:#555;cursor:pointer;gap:6px;margin-top:6px;min-height:24px}
+        .checkbox-label input[type="checkbox"]{width:16px;height:16px;min-height:16px;flex-shrink:0}
+
+        /* ===== BUTTONS ===== */
+        .btn{
+            padding:9px 20px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;
+            border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;
+            transition:.3s;min-height:40px;-webkit-tap-highlight-color:transparent;
+            display:inline-flex;align-items:center;justify-content:center;
+        }
         .btn:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(102,126,234,.4)}
         .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
-        .btn-sm{padding:5px 12px;font-size:11px}
+        .btn-sm{padding:5px 11px;font-size:11px;min-height:30px}
         .btn-danger{background:#e74c3c}.btn-danger:hover{box-shadow:0 6px 18px rgba(231,76,60,.4)}
         .btn-secondary{background:#6c757d}.btn-secondary:hover{box-shadow:0 6px 18px rgba(108,117,125,.4)}
         .btn-ai{background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff}.btn-ai:hover{box-shadow:0 6px 18px rgba(240,147,251,.4)}
-        .table-container{overflow-x:auto;margin-top:20px}
-        table{width:100%;border-collapse:collapse}
-        th{background:#f8f9fa;padding:12px;text-align:left;font-weight:600;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e0e0e0}
-        td{padding:12px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#333}
+
+        /* ===== TABLES ===== */
+        .table-container{overflow-x:auto;margin-top:16px;-webkit-overflow-scrolling:touch;border-radius:8px;border:1px solid #f0f0f0}
+        table{width:100%;border-collapse:collapse;min-width:500px}
+        th{
+            background:#f8f9fa;padding:11px 10px;text-align:left;font-weight:600;
+            font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;
+            border-bottom:2px solid #e0e0e0;white-space:nowrap;
+        }
+        td{padding:10px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#333;word-break:break-word}
         tr:hover{background:#f8f9fa}
         tr.inactive{opacity:.5;background:#f9f9f9}
-        .actions{display:flex;gap:6px;align-items:center}
-        .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600}
+        .actions{display:flex;gap:5px;align-items:center;flex-wrap:nowrap}
+        .badge{display:inline-block;padding:3px 7px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap}
         .badge-active{background:#d4edda;color:#155724}
         .badge-inactive{background:#f8d7da;color:#721c24}
         .badge-domestic{background:#cce5ff;color:#004085}
         .badge-intl{background:#fff3cd;color:#856404}
-        .toggle-switch{position:relative;display:inline-block;width:44px;height:22px}
+
+        /* ===== TOGGLE SWITCH ===== */
+        .toggle-switch{position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0}
         .toggle-switch input{opacity:0;width:0;height:0}
         .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:.3s;border-radius:22px}
         .toggle-slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}
         input:checked+.toggle-slider{background:#27ae60}
-        input:checked+.toggle-slider:before{transform:translateX(22px)}
-        .msg{padding:12px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;display:none}
+        input:checked+.toggle-slider:before{transform:translateX(20px)}
+
+        /* ===== MESSAGES ===== */
+        .msg{padding:11px 14px;border-radius:6px;margin-bottom:14px;font-size:13px;display:none}
         .msg.show{display:block;animation:slideD .3s}
         @keyframes slideD{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
         .msg.success{background:#d4edda;color:#155724;border-left:4px solid #28a745}
         .msg.error{background:#f8d7da;color:#721c24;border-left:4px solid #dc3545}
         .msg.warning{background:#fff3cd;color:#856404;border-left:4px solid #ffc107}
-        .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5)}
-        .modal.show{display:flex;align-items:center;justify-content:center}
-        .modal-content{background:#fff;padding:28px;border-radius:10px;max-width:650px;width:92%;max-height:90vh;overflow-y:auto}
-        .modal-header{font-size:18px;font-weight:700;margin-bottom:16px;color:#333}
-        .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
-        .info-box{background:#e3f2fd;border-left:4px solid #2196f3;padding:12px 16px;margin-bottom:20px;border-radius:6px;font-size:13px;color:#1976d2}
-        .info-box-ai{background:#fce4ec;border-left:4px solid #e91e63;padding:12px 16px;margin-bottom:20px;border-radius:6px;font-size:13px;color:#880e4f}
-        .rate-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}
+
+        /* ===== MODAL ===== */
+        .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);overflow-y:auto;padding:16px}
+        .modal.show{display:flex;align-items:flex-start;justify-content:center}
+        .modal-content{
+            background:#fff;padding:24px;border-radius:10px;max-width:650px;width:100%;
+            margin:auto;
+        }
+        .modal-header{font-size:clamp(15px,3vw,18px);font-weight:700;margin-bottom:14px;color:#333}
+        .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+        .modal-footer .btn{flex:1;min-width:80px}
+
+        /* ===== INFO BOXES ===== */
+        .info-box{background:#e3f2fd;border-left:4px solid #2196f3;padding:11px 14px;margin-bottom:18px;border-radius:6px;font-size:13px;color:#1976d2}
+        .info-box-ai{background:#fce4ec;border-left:4px solid #e91e63;padding:11px 14px;margin-bottom:18px;border-radius:6px;font-size:13px;color:#880e4f}
+
+        /* ===== RATE GRID ===== */
+        .rate-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px}
         .rate-section{padding:12px;background:#f8f9fa;border-radius:6px}
         .rate-section-title{font-size:11px;font-weight:600;text-transform:uppercase;color:#666;margin-bottom:8px}
-        .json-editor{width:100%;min-height:100px;font-family:'Courier New',monospace;font-size:12px;padding:10px;border:2px solid #e0e0e0;border-radius:6px;resize:vertical}
+
+        /* ===== JSON EDITOR ===== */
+        .json-editor{
+            width:100%;min-height:90px;font-family:'Courier New',monospace;font-size:12px;
+            padding:9px;border:2px solid #e0e0e0;border-radius:6px;resize:vertical;
+        }
         .json-editor:focus{outline:none;border-color:#667eea}
-        .empty-state{text-align:center;padding:40px;color:#999}
-        .empty-state-icon{font-size:48px;margin-bottom:10px}
-        .matrix-rate-input{width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:right}
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state{text-align:center;padding:36px;color:#999}
+        .empty-state-icon{font-size:44px;margin-bottom:10px}
+
+        /* ===== MATRIX ===== */
+        .matrix-rate-input{
+            width:80px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;
+            font-size:12px;text-align:right;min-height:30px;
+        }
         .matrix-rate-input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 2px rgba(102,126,234,.15)}
         .matrix-rate-input.modified{border-color:#28a745;background:#f0fff0}
-        .matrix-table th{position:sticky;top:0;z-index:2;font-size:10px;padding:8px 6px}
-        .matrix-table td{padding:6px;text-align:center;font-size:12px}
-        .matrix-table .cab-name{text-align:left;font-weight:600;position:sticky;left:0;background:#fff;z-index:1;min-width:120px}
-        .matrix-save-bar{display:flex;gap:12px;align-items:center;margin-top:16px;padding:12px;background:#f8f9fa;border-radius:6px}
+        .matrix-table th{position:sticky;top:0;z-index:2;font-size:10px;padding:7px 5px;background:#f8f9fa}
+        .matrix-table td{padding:5px;text-align:center;font-size:12px}
+        .matrix-table .cab-name{text-align:left;font-weight:600;position:sticky;left:0;background:#fff;z-index:1;min-width:100px;max-width:140px;word-break:break-word}
+        .matrix-save-bar{display:flex;gap:10px;align-items:center;margin-top:14px;padding:11px;background:#f8f9fa;border-radius:6px;flex-wrap:wrap}
         .matrix-save-bar .changes-count{font-size:13px;color:#666}
-        .nl-rule-container{margin-bottom:20px;padding:16px;background:#fafafa;border-radius:8px;border:1px solid #eee}
-        .nl-rule-input{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:6px;font-size:14px;min-height:44px;resize:none;font-family:inherit;transition:.3s}
+
+        /* ===== AI RULE BUILDER ===== */
+        .nl-rule-container{margin-bottom:18px;padding:14px;background:#fafafa;border-radius:8px;border:1px solid #eee}
+        .nl-rule-input{
+            width:100%;padding:11px 13px;border:2px solid #e0e0e0;border-radius:6px;
+            font-size:14px;min-height:44px;resize:none;font-family:inherit;transition:.3s;
+        }
         .nl-rule-input:focus{outline:none;border-color:#f093fb;box-shadow:0 0 0 3px rgba(240,147,251,.15)}
         .nl-rule-input::placeholder{color:#aaa}
-        .nl-rule-actions{display:flex;gap:8px;margin-top:10px;align-items:center}
+        .nl-rule-actions{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
         .nl-rule-status{font-size:12px;padding:6px 10px;border-radius:4px;margin-top:8px;display:none}
         .nl-rule-status.show{display:block}
         .nl-rule-status.success{background:#d4edda;color:#155724}
         .nl-rule-status.error{background:#f8d7da;color:#721c24}
         .nl-rule-status.warning{background:#fff3cd;color:#856404}
-        .nl-rule-examples{margin-top:8px;font-size:11px;color:#888;line-height:1.8}
-        .nl-rule-examples code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:10px}
-        .clarification-box{background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;margin-top:12px;border-radius:6px;font-size:13px;color:#856404;display:none}
+        .nl-rule-examples{margin-top:8px;font-size:11px;color:#888;line-height:1.9}
+        .nl-rule-examples code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:10px;word-break:break-all}
+        .clarification-box{background:#fff3cd;border-left:4px solid #ffc107;padding:11px 14px;margin-top:11px;border-radius:6px;font-size:13px;color:#856404;display:none}
         .clarification-box.show{display:block}
-        @media(max-width:768px){.container{padding:0 16px}.form-grid{grid-template-columns:1fr}.rate-grid{grid-template-columns:1fr}}
+
+        /* ===== MOBILE NAV ===== */
+        .mobile-tab-scroll{
+            display:none;
+            overflow-x:auto;
+            -webkit-overflow-scrolling:touch;
+            scroll-behavior:smooth;
+        }
+
+        /* ===== RESPONSIVE BREAKPOINTS ===== */
+
+        /* Tablets (900px and below) */
+        @media (max-width:900px){
+            .container{padding:0 12px;margin:14px auto}
+            .form-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+            .rate-grid{grid-template-columns:1fr 1fr}
+            .header{padding:12px 16px}
+        }
+
+        /* Small tablets and large phones (700px and below) */
+        @media (max-width:700px){
+            .header{padding:10px 14px}
+            .header h1{font-size:15px}
+            .header-right{gap:8px}
+            .container{padding:0 10px;margin:12px auto}
+            .section-card{padding:16px}
+            .tabs{
+                padding:8px;gap:4px;border-radius:8px;
+                overflow-x:auto;flex-wrap:nowrap;
+            }
+            .tab{font-size:11px;padding:8px 11px;min-height:34px}
+            .form-grid{grid-template-columns:1fr}
+            .rate-grid{grid-template-columns:1fr}
+            table{min-width:400px}
+            .modal{padding:10px}
+            .modal-content{padding:18px}
+            .matrix-rate-input{width:70px;font-size:11px}
+            .btn{font-size:12px;padding:8px 16px}
+            .btn-sm{font-size:10px;padding:4px 9px}
+        }
+
+        /* Mobile phones (480px and below) */
+        @media (max-width:480px){
+            .header{padding:10px 12px;gap:8px}
+            .header h1{font-size:13px}
+            .client-selector{font-size:12px;padding:6px 10px}
+            .btn-logout{font-size:12px;padding:6px 12px}
+            .container{padding:0 8px;margin:10px auto}
+            .section-card{padding:14px;border-radius:8px}
+            .section-header{font-size:15px;margin-bottom:12px;padding-bottom:8px}
+            .tabs{
+                padding:7px;border-radius:8px;gap:3px;
+                /* Make tabs wrap on very small screens */
+                flex-wrap:wrap;
+            }
+            .tab{font-size:10px;padding:7px 9px;min-height:32px;border-radius:5px}
+            .form-group input,.form-group select,.form-group textarea{font-size:16px;/* Prevents iOS auto-zoom */}
+            td{font-size:11px;padding:8px 7px}
+            th{font-size:10px;padding:8px 7px}
+            .actions{gap:4px}
+            .btn-sm{font-size:10px;padding:4px 8px;min-height:28px}
+            .toggle-switch{width:38px;height:20px}
+            .toggle-slider:before{height:14px;width:14px}
+            input:checked+.toggle-slider:before{transform:translateX(18px)}
+            .nl-rule-input{font-size:16px}
+            .json-editor{font-size:11px}
+            .matrix-rate-input{width:60px;font-size:10px;padding:4px 5px}
+            .rate-section{padding:10px}
+            .region-section-title{font-size:14px}
+            .filter-btn{font-size:11px;padding:6px 11px}
+            .modal-footer{flex-direction:column}
+            .modal-footer .btn{width:100%}
+        }
+
+        /* Very small phones */
+        @media (max-width:360px){
+            .header h1{font-size:12px}
+            .tab{font-size:9px;padding:6px 7px}
+            .container{padding:0 6px}
+        }
     </style>
 </head>
 <body>
@@ -128,10 +299,10 @@
         <button class="tab" data-tab="destinations">🏔️ Destinations</button>
         <button class="tab" data-tab="hotels">🏨 Hotels</button>
         <button class="tab" data-tab="cabs">🚗 Cabs</button>
-        <button class="tab" data-tab="cab-dest-rates">🚗🏔️ Cab-Dest Rates</button>
+        <button class="tab" data-tab="cab-dest-rates">🚗🏔️ Cab-Dest</button>
         <button class="tab" data-tab="addons">➕ Add-ons</button>
-        <button class="tab" data-tab="pricing-rules">📐 Pricing Rules</button>
-        <button class="tab" data-tab="global-rules">⚙️ Global Rules</button>
+        <button class="tab" data-tab="pricing-rules">📐 Rules</button>
+        <button class="tab" data-tab="global-rules">⚙️ Global</button>
     </div>
 
     <!-- ===== CLIENTS TAB ===== -->
@@ -155,7 +326,7 @@
         </div>
     </div>
 
-    <!-- ===== REGIONS TAB (FIXED WITH DOMESTIC/INTERNATIONAL SEPARATION) ===== -->
+    <!-- ===== REGIONS TAB ===== -->
     <div class="tab-content" id="regions">
         <div class="section-card">
             <div class="section-header">Create New Region</div>
@@ -177,7 +348,6 @@
             </form>
         </div>
 
-        <!-- DOMESTIC REGIONS SECTION -->
         <div class="section-card">
             <div class="region-section-divider">
                 <div class="region-section-title">🇮🇳 Domestic Regions</div>
@@ -190,7 +360,6 @@
             </div>
         </div>
 
-        <!-- INTERNATIONAL REGIONS SECTION -->
         <div class="section-card">
             <div class="region-section-divider">
                 <div class="region-section-title">🌎 International Regions</div>
@@ -204,7 +373,7 @@
         </div>
     </div>
 
-    <!-- ===== TRANSPORT TAB (FIXED WITH PRICING TYPES) ===== -->
+    <!-- ===== TRANSPORT TAB ===== -->
     <div class="tab-content" id="transport">
         <div class="section-card">
             <div class="section-header">Create New Transport</div>
@@ -246,8 +415,8 @@
             <div class="section-header">All Transports</div>
             <div class="filter-buttons">
                 <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
-                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
-                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
             <div class="table-container"><table id="transportsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Peak Adult</th><th>Peak Child</th><th>Peak Type</th><th>Off Adult</th><th>Off Child</th><th>Off Type</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
@@ -272,8 +441,8 @@
             <div class="section-header">All Destinations</div>
             <div class="filter-buttons">
                 <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
-                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
-                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
             <div class="table-container"><table id="destinationsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Base</th><th>Per-Day</th><th>Special</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
@@ -311,8 +480,8 @@
             <div class="section-header">All Hotels</div>
             <div class="filter-buttons">
                 <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
-                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
-                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
             <div class="table-container"><table id="hotelsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Sharing</th><th>Peak Adult</th><th>Peak Child</th><th>Off Adult</th><th>Off Child</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
@@ -336,8 +505,8 @@
             <div class="section-header">All Cabs</div>
             <div class="filter-buttons">
                 <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
-                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
-                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
             <div class="table-container"><table id="cabsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Base</th><th>Per-Day</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
@@ -371,7 +540,7 @@
         </div>
     </div>
 
-    <!-- ===== ADDONS TAB (FIXED WITH PEAK/OFF RATES) ===== -->
+    <!-- ===== ADDONS TAB ===== -->
     <div class="tab-content" id="addons">
         <div class="section-card">
             <div class="section-header">Create New Add-on</div>
@@ -412,8 +581,8 @@
             <div class="section-header">All Add-ons</div>
             <div class="filter-buttons">
                 <button class="filter-btn active" data-filter="all" onclick="setRegionFilter('all')">All Regions</button>
-                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic Only</button>
-                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International Only</button>
+                <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
+                <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
             <div class="table-container"><table id="addonsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Type</th><th>Pricing</th><th>Peak Rate</th><th>Off Rate</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
@@ -444,7 +613,7 @@
                     Examples:
                     <code>Increase hotel rate by 10% during peak season</code>
                     <code>Decrease transport cost by 15% for groups of 6+ adults</code>
-                    <code>Add flat fee of 500 when nights >= 3</code>
+                    <code>Add flat fee of 500 when nights &gt;= 3</code>
                     <code>Apply 5% margin on total for off season</code>
                     <code>Decrease cab cost by 10% for 4+ nights</code>
                 </div>
@@ -465,12 +634,12 @@
                     <div class="form-group">
                         <label>Conditions (JSON)</label>
                         <textarea class="json-editor" name="conditions_json" id="ruleConditions" placeholder='{"season": "ON", "adults_gte": 4}'>{}</textarea>
-                        <small style="color:#999;margin-top:4px;display:block">Keys: season, adults_gte, adults_lte, children_gte, nights_gte, nights_lte, hotel, transport, pax_gte, region_id</small>
+                        <small style="color:#999;margin-top:4px;display:block;font-size:11px">Keys: season, adults_gte, adults_lte, children_gte, nights_gte, nights_lte, hotel, transport, pax_gte, region_id</small>
                     </div>
                     <div class="form-group">
                         <label>Actions (JSON)</label>
                         <textarea class="json-editor" name="actions_json" id="ruleActions" placeholder='{"type": "increase_rate_percent", "target": "hotel", "value": 10}'>{}</textarea>
-                        <small style="color:#999;margin-top:4px;display:block">Types: increase_rate_percent, decrease_rate_percent, override_rate, add_flat_fee, apply_margin. Targets: hotel, transport, sightseeing, cab, addon, total</small>
+                        <small style="color:#999;margin-top:4px;display:block;font-size:11px">Types: increase_rate_percent, decrease_rate_percent, override_rate, add_flat_fee, apply_margin. Targets: hotel, transport, sightseeing, cab, addon, total</small>
                     </div>
                 </div>
                 <label class="checkbox-label"><input type="checkbox" name="stackable" value="1" id="ruleStackable" checked> Stackable (can combine with other rules)</label>
@@ -520,8 +689,7 @@ let allClients=[], allRegions=[], allTransports=[], allDestinations=[], allHotel
 let currentEditItem=null, currentEditType=null;
 let matrixPendingChanges = {};
 
-// NEW: Region type filter state
-let regionTypeFilter = 'all'; // 'all', 'domestic', 'international'
+let regionTypeFilter = 'all';
 
 // ===== TAB SWITCH =====
 document.querySelectorAll('.tab').forEach(t => {
@@ -530,6 +698,8 @@ document.querySelectorAll('.tab').forEach(t => {
         document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
         t.classList.add('active');
         document.getElementById(t.dataset.tab).classList.add('active');
+        // Scroll tab into view on mobile
+        t.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
     });
 });
 
@@ -537,6 +707,8 @@ function showMsg(text, type='success') {
     const m = document.getElementById('message');
     m.textContent = text; m.className = `msg ${type} show`;
     setTimeout(() => m.classList.remove('show'), 5000);
+    // Scroll to top to show message
+    window.scrollTo({top:0,behavior:'smooth'});
 }
 function closeModal() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('show')); }
 
@@ -556,7 +728,7 @@ async function loadAll() {
     await Promise.all([loadRegions(), loadTransports(), loadDestinations(), loadHotels(), loadCabs(), loadAddons(), loadCabDestMatrix(), loadRules(), loadGlobalRules()]);
 }
 
-// NEW: Helper functions for region filtering
+// Helper functions for region filtering
 function getRegionById(regionId) {
     return allRegions.find(r => r.id === regionId);
 }
@@ -565,7 +737,6 @@ function matchesRegionFilter(entity) {
     if (regionTypeFilter === 'all') return true;
     const region = getRegionById(entity.region_id);
     if (!region) return true;
-    
     if (regionTypeFilter === 'domestic') return region.is_domestic === true;
     if (regionTypeFilter === 'international') return region.is_domestic === false;
     return true;
@@ -573,17 +744,10 @@ function matchesRegionFilter(entity) {
 
 function setRegionFilter(filter) {
     regionTypeFilter = filter;
-    
-    // Update all filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
-        if (btn.dataset.filter === filter) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        if (btn.dataset.filter === filter) btn.classList.add('active');
+        else btn.classList.remove('active');
     });
-    
-    // Refresh all displays
     displayTransports();
     displayDestinations();
     displayHotels();
@@ -671,7 +835,7 @@ async function deleteEntity(type, id) {
     }
 }
 
-// ===== REGIONS (FIXED WITH DOMESTIC/INTERNATIONAL SEPARATION) =====
+// ===== REGIONS =====
 async function loadRegions() {
     try {
         const res = await fetch(cq(`${API}/api/regions`));
@@ -688,14 +852,14 @@ async function loadRegions() {
 function displayRegions() {
     const domesticRegions = allRegions.filter(r => r.is_domestic === true);
     const internationalRegions = allRegions.filter(r => r.is_domestic === false);
-    
+
     const domTb = document.querySelector('#domesticRegionsTable tbody');
     if (domesticRegions.length === 0) {
         domTb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No domestic regions yet</td></tr>';
     } else {
         domTb.innerHTML = domesticRegions.map(r => renderRegionRow(r)).join('');
     }
-    
+
     const intlTb = document.querySelector('#internationalRegionsTable tbody');
     if (internationalRegions.length === 0) {
         intlTb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No international regions yet</td></tr>';
@@ -718,7 +882,7 @@ function renderRegionRow(r) {
 function updateRegionSelects() {
     ['transportRegion','destRegion','hotelRegion','cabRegion','addonRegion'].forEach(id => {
         const s=document.getElementById(id); if(!s) return;
-        const v=s.value; 
+        const v=s.value;
         s.innerHTML='<option value="">Select Region</option>'+allRegions.filter(r=>r.active).map(r=>`<option value="${r.id}">${r.name} ${r.is_domestic?'🇮🇳':'🌎'}</option>`).join('');
         if(v) s.value=v;
     });
@@ -756,7 +920,7 @@ function editRegion(id) {
     document.getElementById('editModal').classList.add('show');
 }
 
-// ===== TRANSPORTS (FIXED WITH FILTERING) =====
+// ===== TRANSPORTS =====
 async function loadTransports() {
     try {
         const res=await fetch(cq(`${API}/api/transports`));
@@ -772,12 +936,10 @@ async function loadTransports() {
 function displayTransports() {
     const filtered = allTransports.filter(t => matchesRegionFilter(t));
     const tb=document.querySelector('#transportsTable tbody');
-    
     if (filtered.length === 0) {
         tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999;padding:24px">No transports found for selected filter</td></tr>';
         return;
     }
-    
     tb.innerHTML=filtered.map(t=>{
         const r=getRegionById(t.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
@@ -805,7 +967,7 @@ document.getElementById('transportForm').addEventListener('submit', async e => {
     }
 });
 
-// ===== DESTINATIONS (WITH FILTERING) =====
+// ===== DESTINATIONS =====
 async function loadDestinations() {
     try {
         const res=await fetch(cq(`${API}/api/destinations`));
@@ -821,12 +983,10 @@ async function loadDestinations() {
 function displayDestinations() {
     const filtered = allDestinations.filter(d => matchesRegionFilter(d));
     const tb=document.querySelector('#destinationsTable tbody');
-    
     if (filtered.length === 0) {
         tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">No destinations found for selected filter</td></tr>';
         return;
     }
-    
     tb.innerHTML=filtered.map(d=>{
         const r=getRegionById(d.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
@@ -854,7 +1014,7 @@ document.getElementById('destinationForm').addEventListener('submit', async e =>
     }
 });
 
-// ===== HOTELS (WITH FILTERING) =====
+// ===== HOTELS =====
 async function loadHotels() {
     try {
         const res=await fetch(cq(`${API}/api/hotels`));
@@ -870,18 +1030,16 @@ async function loadHotels() {
 function displayHotels() {
     const filtered = allHotels.filter(h => matchesRegionFilter(h));
     const tb=document.querySelector('#hotelsTable tbody');
-    
     if (filtered.length === 0) {
         tb.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;padding:24px">No hotels found for selected filter</td></tr>';
         return;
     }
-    
     tb.innerHTML=filtered.map(h=>{
         const r=getRegionById(h.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
-        let sh=h.sharing_type; 
+        let sh=h.sharing_type;
         if(sh==='CUSTOM'&&h.custom_sharing_name)sh=`${h.custom_sharing_name}(${h.sharing_capacity})`;
-        else if(sh==='DOUBLE')sh='Double(2)'; 
+        else if(sh==='DOUBLE')sh='Double(2)';
         else if(sh==='QUAD')sh='Quad(4)';
         return `<tr class="${h.active?'':'inactive'}">
         <td>${h.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${h.name}</td><td>${sh}</td>
@@ -906,7 +1064,7 @@ document.getElementById('hotelForm').addEventListener('submit', async e => {
     }
 });
 
-// ===== CABS (WITH FILTERING) =====
+// ===== CABS =====
 async function loadCabs() {
     try {
         const res=await fetch(cq(`${API}/api/cabs`));
@@ -922,12 +1080,10 @@ async function loadCabs() {
 function displayCabs() {
     const filtered = allCabs.filter(c => matchesRegionFilter(c));
     const tb=document.querySelector('#cabsTable tbody');
-    
     if (filtered.length === 0) {
         tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No cabs found for selected filter</td></tr>';
         return;
     }
-    
     tb.innerHTML=filtered.map(c=>{
         const r=getRegionById(c.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
@@ -994,9 +1150,10 @@ function renderMatrix() {
         ratesMap[`${m.cab_id}_${m.destination_id}`] = m;
     });
 
-    let html = '<table class="matrix-table"><thead><tr><th class="cab-name">Cab \\ Destination</th>';
+    let html = '<table class="matrix-table"><thead><tr><th class="cab-name">Cab \\ Dest</th>';
     dests.forEach(d => {
-        html += `<th title="${d.name}">${d.name.length > 15 ? d.name.substring(0,14)+'…' : d.name}</th>`;
+        const shortName = d.name.length > 12 ? d.name.substring(0,11)+'…' : d.name;
+        html += `<th title="${d.name}">${shortName}</th>`;
     });
     html += '</tr></thead><tbody>';
 
@@ -1097,7 +1254,7 @@ document.getElementById('cabDestRateForm').addEventListener('submit', async e =>
     }
 });
 
-// ===== ADDONS (FIXED WITH FILTERING) =====
+// ===== ADDONS =====
 async function loadAddons() {
     try {
         const res=await fetch(cq(`${API}/api/addons`));
@@ -1113,12 +1270,10 @@ async function loadAddons() {
 function displayAddons() {
     const filtered = allAddons.filter(a => matchesRegionFilter(a));
     const tb=document.querySelector('#addonsTable tbody');
-    
     if (filtered.length === 0) {
         tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:24px">No add-ons found for selected filter</td></tr>';
         return;
     }
-    
     tb.innerHTML=filtered.map(a=>{
         const r=getRegionById(a.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
@@ -1171,8 +1326,8 @@ function displayRules() {
         return `<tr class="${r.active?'':'inactive'}">
         <td>${r.id}</td><td>${r.name}</td><td>${r.entity_type}</td><td>${r.entity_id||'All'}</td>
         <td>${r.priority}</td><td>${r.stackable?'Yes':'No'}</td>
-        <td><code style="font-size:10px;word-break:break-all">${cond}</code></td>
-        <td><code style="font-size:10px;word-break:break-all">${act}</code></td>
+        <td><code style="font-size:10px;word-break:break-all;max-width:120px;display:block">${cond}</code></td>
+        <td><code style="font-size:10px;word-break:break-all;max-width:120px;display:block">${act}</code></td>
         <td><span class="badge ${r.active?'badge-active':'badge-inactive'}">${r.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${r.active?'checked':''} onchange="toggleEntity('pricing-rules',${r.id},this.checked)"><span class="toggle-slider"></span></label>
@@ -1333,6 +1488,11 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
         console.error('Save edit error:', e);
         showMsg('Failed to save changes', 'error');
     }
+});
+
+// Close modal on backdrop click
+document.getElementById('editModal').addEventListener('click', function(e){
+    if(e.target === this) closeModal();
 });
 
 // ===== INIT =====
