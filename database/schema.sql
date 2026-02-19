@@ -1,6 +1,6 @@
 -- =====================================================
 -- TRAVEL PRICING RULE ENGINE - ENTERPRISE SCHEMA
--- Version 3.1 — PRODUCTION FIX + MIGRATION SUPPORT
+-- Version 4.0 — HARD DELETE + TRANSPORT TRIP TYPE + MIGRATIONS
 -- =====================================================
 
 -- =====================================================
@@ -14,10 +14,8 @@ CREATE TABLE IF NOT EXISTS clients (
     contact_phone VARCHAR(30),
     currency_default VARCHAR(10) NOT NULL DEFAULT 'INR',
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    
 );
 
 INSERT INTO clients (id, name, code, currency_default) VALUES
@@ -36,13 +34,12 @@ CREATE TABLE IF NOT EXISTS regions (
     service_percent DECIMAL(5,2) NOT NULL DEFAULT 15.00,
     booking_percent DECIMAL(5,2) NOT NULL DEFAULT 12.00,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS regions_client_name_active_unique 
-ON regions(client_id, name) WHERE deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS regions_client_name_active_unique
+ON regions(client_id, name);
 
 INSERT INTO regions (id, client_id, name, currency, is_domestic, service_percent, booking_percent) VALUES
     (1, 1, 'GOA', 'INR', TRUE, 15.00, 12.00),
@@ -51,7 +48,7 @@ INSERT INTO regions (id, client_id, name, currency, is_domestic, service_percent
 ON CONFLICT DO NOTHING;
 
 -- =====================================================
--- TRANSPORTS (WITH PRICING TYPES)
+-- TRANSPORTS (WITH PRICING TYPES + TRIP TYPE + RETURN MULTIPLIER)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS transports (
     id SERIAL PRIMARY KEY,
@@ -67,17 +64,21 @@ CREATE TABLE IF NOT EXISTS transports (
     adult_rate_off DECIMAL(12,2) NOT NULL DEFAULT 0,
     child_rate_off DECIMAL(12,2) NOT NULL DEFAULT 0,
     off_pricing_type VARCHAR(20) NOT NULL DEFAULT 'per_person',
+    -- Trip type support: 'one_way', 'return', 'both'
+    trip_type VARCHAR(20) NOT NULL DEFAULT 'both',
+    -- Multiplier applied to base cost when trip_type is 'return' or 'both' and user picks return
+    return_rate_multiplier DECIMAL(5,3) NOT NULL DEFAULT 1.800,
     upgrade_to_id INTEGER REFERENCES transports(id) ON DELETE SET NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (peak_pricing_type IN ('per_person', 'per_vehicle')),
-    CHECK (off_pricing_type IN ('per_person', 'per_vehicle'))
+    CHECK (off_pricing_type IN ('per_person', 'per_vehicle')),
+    CHECK (trip_type IN ('one_way', 'return', 'both'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS transports_client_region_type_active_unique 
-ON transports(client_id, region_id, transport_type) WHERE deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS transports_client_region_type_active_unique
+ON transports(client_id, region_id, transport_type);
 
 -- MIGRATION: Add pricing_type columns if they don't exist
 DO $$
@@ -86,10 +87,21 @@ BEGIN
         ALTER TABLE transports ADD COLUMN peak_pricing_type VARCHAR(20) NOT NULL DEFAULT 'per_person';
         ALTER TABLE transports ADD CONSTRAINT transports_peak_pricing_type_check CHECK (peak_pricing_type IN ('per_person', 'per_vehicle'));
     END IF;
-    
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transports' AND column_name='off_pricing_type') THEN
         ALTER TABLE transports ADD COLUMN off_pricing_type VARCHAR(20) NOT NULL DEFAULT 'per_person';
         ALTER TABLE transports ADD CONSTRAINT transports_off_pricing_type_check CHECK (off_pricing_type IN ('per_person', 'per_vehicle'));
+    END IF;
+    -- NEW: trip_type and return_rate_multiplier
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transports' AND column_name='trip_type') THEN
+        ALTER TABLE transports ADD COLUMN trip_type VARCHAR(20) NOT NULL DEFAULT 'both';
+        ALTER TABLE transports ADD CONSTRAINT transports_trip_type_check CHECK (trip_type IN ('one_way', 'return', 'both'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transports' AND column_name='return_rate_multiplier') THEN
+        ALTER TABLE transports ADD COLUMN return_rate_multiplier DECIMAL(5,3) NOT NULL DEFAULT 1.800;
+    END IF;
+    -- Remove soft delete columns from transports if present
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transports' AND column_name='deleted') THEN
+        ALTER TABLE transports DROP COLUMN deleted;
     END IF;
 END $$;
 
@@ -111,13 +123,12 @@ CREATE TABLE IF NOT EXISTS destinations (
     four_by_four_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
     free_sightseeing_days INTEGER NOT NULL DEFAULT 0,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS destinations_client_region_internal_active_unique 
-ON destinations(client_id, region_id, internal_name) WHERE deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS destinations_client_region_internal_active_unique
+ON destinations(client_id, region_id, internal_name);
 
 INSERT INTO destinations (client_id, region_id, name, internal_name, display_name, destination_type, is_special, base_rate, per_day_rate) VALUES
     (1, 1, 'Calangute Beach', 'calaungate', 'Calangute Beach', 'BEACH', 0, 0, 500.00),
@@ -127,6 +138,14 @@ INSERT INTO destinations (client_id, region_id, name, internal_name, display_nam
     (1, 2, 'Solang Valley', 'solang-valley', 'Solang Valley', 'ADVENTURE', 1, 1200.00, 1500.00),
     (1, 3, 'Jaipur City', 'jaipur', 'Jaipur', 'HERITAGE', 0, 0, 700.00)
 ON CONFLICT DO NOTHING;
+
+-- MIGRATION: Remove soft delete from destinations if present
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='destinations' AND column_name='deleted') THEN
+        ALTER TABLE destinations DROP COLUMN deleted;
+    END IF;
+END $$;
 
 -- =====================================================
 -- HOTELS
@@ -150,13 +169,12 @@ CREATE TABLE IF NOT EXISTS hotels (
     adult_rate_off DECIMAL(12,2) NOT NULL DEFAULT 0,
     child_rate_off DECIMAL(12,2) NOT NULL DEFAULT 0,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS hotels_client_region_internal_active_unique 
-ON hotels(client_id, region_id, internal_name) WHERE deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS hotels_client_region_internal_active_unique
+ON hotels(client_id, region_id, internal_name);
 
 INSERT INTO hotels (client_id, region_id, name, internal_name, sharing_type, sharing_capacity, adult_rate_peak, child_rate_peak, adult_rate_off, child_rate_off) VALUES
     (1, 1, 'Hotel Goa', 'hotel-goa', 'DOUBLE', 2, 2500.00, 1000.00, 2000.00, 800.00),
@@ -164,6 +182,14 @@ INSERT INTO hotels (client_id, region_id, name, internal_name, sharing_type, sha
     (1, 2, 'Manali Heights', 'manali-heights', 'DOUBLE', 2, 3000.00, 1200.00, 2500.00, 1000.00),
     (1, 3, 'Jaipur Palace Hotel', 'jaipur-palace', 'QUAD', 4, 4000.00, 1500.00, 3500.00, 1200.00)
 ON CONFLICT DO NOTHING;
+
+-- MIGRATION: Remove soft delete from hotels if present
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hotels' AND column_name='deleted') THEN
+        ALTER TABLE hotels DROP COLUMN deleted;
+    END IF;
+END $$;
 
 -- =====================================================
 -- CABS
@@ -179,13 +205,12 @@ CREATE TABLE IF NOT EXISTS cabs (
     base_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
     per_day_rate DECIMAL(12,2) NOT NULL DEFAULT 0,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS cabs_client_region_internal_active_unique 
-ON cabs(client_id, region_id, internal_name) WHERE deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS cabs_client_region_internal_active_unique
+ON cabs(client_id, region_id, internal_name);
 
 INSERT INTO cabs (client_id, region_id, name, internal_name, display_name, capacity, base_rate, per_day_rate) VALUES
     (1, 1, 'Alto', 'alto', 'Maruti Alto', 4, 500.00, 800.00),
@@ -193,6 +218,14 @@ INSERT INTO cabs (client_id, region_id, name, internal_name, display_name, capac
     (1, 2, 'Innova', 'innova', 'Toyota Innova', 7, 1200.00, 1800.00),
     (1, 3, 'Tempo Traveller', 'tempo-traveller', 'Tempo Traveller', 12, 2000.00, 3000.00)
 ON CONFLICT DO NOTHING;
+
+-- MIGRATION: Remove soft delete from cabs if present
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cabs' AND column_name='deleted') THEN
+        ALTER TABLE cabs DROP COLUMN deleted;
+    END IF;
+END $$;
 
 -- =====================================================
 -- CAB ↔ DESTINATION RATE MATRIX
@@ -208,10 +241,10 @@ CREATE TABLE IF NOT EXISTS cab_destination_rates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS cab_dest_rates_client_cab_dest_active_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS cab_dest_rates_client_cab_dest_active_unique
 ON cab_destination_rates(client_id, cab_id, destination_id);
 
-INSERT INTO cab_destination_rates (client_id, cab_id, destination_id, rate, override_rate) 
+INSERT INTO cab_destination_rates (client_id, cab_id, destination_id, rate, override_rate)
 SELECT 1, c.id, d.id, 800.00, NULL
 FROM cabs c, destinations d
 WHERE c.internal_name = 'alto' AND d.internal_name = 'calaungate'
@@ -233,13 +266,12 @@ CREATE TABLE IF NOT EXISTS addons (
     rate_peak DECIMAL(12,2) NOT NULL DEFAULT 0,
     rate_off DECIMAL(12,2) NOT NULL DEFAULT 0,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS addons_client_region_internal_active_unique 
-ON addons(client_id, region_id, internal_name) WHERE deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS addons_client_region_internal_active_unique
+ON addons(client_id, region_id, internal_name);
 
 -- MIGRATION: Add rate_peak and rate_off columns if they don't exist
 DO $$
@@ -247,9 +279,12 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='addons' AND column_name='rate_peak') THEN
         ALTER TABLE addons ADD COLUMN rate_peak DECIMAL(12,2) NOT NULL DEFAULT 0;
     END IF;
-    
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='addons' AND column_name='rate_off') THEN
         ALTER TABLE addons ADD COLUMN rate_off DECIMAL(12,2) NOT NULL DEFAULT 0;
+    END IF;
+    -- Remove soft delete from addons if present
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='addons' AND column_name='deleted') THEN
+        ALTER TABLE addons DROP COLUMN deleted;
     END IF;
 END $$;
 
@@ -276,19 +311,26 @@ CREATE TABLE IF NOT EXISTS pricing_rules (
     priority INTEGER NOT NULL DEFAULT 100,
     stackable BOOLEAN NOT NULL DEFAULT TRUE,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- MIGRATION: Remove soft delete from pricing_rules if present
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pricing_rules' AND column_name='deleted') THEN
+        ALTER TABLE pricing_rules DROP COLUMN deleted;
+    END IF;
+END $$;
+
 INSERT INTO pricing_rules (client_id, name, description, entity_type, conditions_json, actions_json, priority, stackable) VALUES
-    (1, 'Peak Season Surcharge', 'Add 10% to hotel cost during peak season', 'global', 
-     '{"season": "ON"}', 
-     '{"type": "increase_rate_percent", "target": "hotel", "value": 10}', 
+    (1, 'Peak Season Surcharge', 'Add 10% to hotel cost during peak season', 'global',
+     '{"season": "ON"}',
+     '{"type": "increase_rate_percent", "target": "hotel", "value": 10}',
      100, TRUE),
-    (1, 'Group Discount', 'Reduce total by 5% for groups of 6 or more', 'global', 
-     '{"pax_gte": 6}', 
-     '{"type": "decrease_rate_percent", "target": "total", "value": 5}', 
+    (1, 'Group Discount', 'Reduce total by 5% for groups of 6 or more', 'global',
+     '{"pax_gte": 6}',
+     '{"type": "decrease_rate_percent", "target": "total", "value": 5}',
      200, TRUE)
 ON CONFLICT DO NOTHING;
 

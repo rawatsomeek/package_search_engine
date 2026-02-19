@@ -1,11 +1,14 @@
 """
 Travel Pricing Rule Engine — Enterprise Edition
 ================================================
+Version 4.0 — Hard Delete + Transport Trip Type + Return Multiplier
+
 Core calculation logic with:
   - Multi-client scoping
   - Dynamic rule engine
   - Occupancy-based room calculator
   - Transport pricing type support (per_person/per_vehicle)
+  - Transport trip type support (one_way/return/both) with return_rate_multiplier
   - Add-on peak/off rates
   - Flight component support (one_way / return)
   - Live hotel support (Amadeus Hotel Offers API)
@@ -17,6 +20,13 @@ AI layers and frontends MUST call this engine — never compute prices themselve
 Hotel Source Behavior:
   - hotel_source == "admin" (default): existing per-person per-night logic, all hotel rules apply
   - hotel_source == "live": Amadeus total stay price used directly, entity_type="hotel" rules skipped
+
+Transport Trip Type Behavior:
+  - payload['trip_type'] in ('one_way', 'return')
+  - If trip_type == 'return' AND transport.trip_type IN ('both', 'return'):
+      transport_cost = base_cost * transport.return_rate_multiplier
+  - If trip_type == 'one_way' OR transport.trip_type == 'one_way':
+      transport_cost = base_cost (no multiplier)
 """
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -148,7 +158,7 @@ class RuleEngine:
             SELECT id, name, entity_type, entity_id,
                    conditions_json, actions_json, priority, stackable
             FROM pricing_rules
-            WHERE client_id = %s AND active = TRUE AND deleted = FALSE
+            WHERE client_id = %s AND active = TRUE
         """
         params = [self.client_id]
 
@@ -415,9 +425,6 @@ class LiveHotelCostCalculator:
             live_hotel_payload: Dict containing:
                 - live_hotel_total_price: numeric total stay price in INR
                   (currency conversion has already been applied server-side)
-                - live_hotel_id: str (offer ID for reference, not used in math)
-                - live_hotel_currency: str (original currency, informational only)
-                - live_hotel_original_price: numeric (original price before FX, informational)
 
         Returns:
             Decimal total hotel cost in INR
@@ -444,16 +451,105 @@ class LiveHotelCostCalculator:
 
 
 # =====================================================
+# TRANSPORT COST CALCULATOR
+# =====================================================
+
+class TransportCostCalculator:
+    """
+    Calculates transport cost with full support for:
+      - per_person vs per_vehicle pricing types
+      - one_way vs return trip types with configurable return_rate_multiplier
+
+    This is the SINGLE SOURCE OF TRUTH for transport cost computation.
+
+    Trip Type Logic:
+      - payload trip_type = 'return'
+        AND transport.trip_type IN ('both', 'return')
+        → base_cost × return_rate_multiplier
+      - Any other combination → base_cost (no multiplier)
+
+    The multiplier is stored per-transport in the DB, defaulting to 1.8 (1.8×).
+    This means a return journey costs 1.8× the one-way base price by default.
+    Admin can override per transport in the admin panel.
+    """
+
+    @staticmethod
+    def calculate(
+        transport_row: Optional[tuple],
+        adults: int,
+        children: int,
+        season: str,
+        user_trip_type: str
+    ) -> Decimal:
+        """
+        Calculate transport cost from a DB row.
+
+        Args:
+            transport_row: Tuple from DB query:
+                (adult_rate_peak, child_rate_peak, peak_pricing_type,
+                 adult_rate_off, child_rate_off, off_pricing_type,
+                 trip_type, return_rate_multiplier)
+            adults: Number of adults
+            children: Number of children
+            season: 'ON' or 'OFF'
+            user_trip_type: 'one_way' or 'return' from user selection
+
+        Returns:
+            Decimal transport cost
+        """
+        if not transport_row:
+            return Decimal('0')
+
+        if season == 'ON':
+            adult_rate = Decimal(str(transport_row[0]))
+            child_rate = Decimal(str(transport_row[1]))
+            pricing_type = transport_row[2]
+        else:
+            adult_rate = Decimal(str(transport_row[3]))
+            child_rate = Decimal(str(transport_row[4]))
+            pricing_type = transport_row[5]
+
+        transport_trip_type = transport_row[6] or 'both'  # 'one_way', 'return', 'both'
+        return_multiplier = Decimal(str(transport_row[7])) if transport_row[7] else Decimal('1.8')
+
+        # Calculate base cost based on pricing type
+        if pricing_type == 'per_vehicle':
+            # adult_rate = full vehicle cost; child_rate unused
+            base_cost = adult_rate
+        else:
+            # Default: per_person
+            base_cost = (adult_rate * adults) + (child_rate * children)
+
+        # Apply return multiplier if applicable:
+        # User selected 'return' AND transport supports return ('both' or 'return')
+        if user_trip_type == 'return' and transport_trip_type in ('both', 'return'):
+            total = (base_cost * return_multiplier).quantize(Decimal('0.01'), ROUND_HALF_UP)
+            logger.info(
+                f"Transport cost (return): base={base_cost}, "
+                f"multiplier={return_multiplier}, total={total}"
+            )
+        else:
+            total = base_cost.quantize(Decimal('0.01'), ROUND_HALF_UP)
+            logger.info(
+                f"Transport cost (one_way): base={base_cost}, total={total}, "
+                f"user_trip_type={user_trip_type}, transport_trip_type={transport_trip_type}"
+            )
+
+        return total
+
+
+# =====================================================
 # MAIN PRICING ENGINE
 # =====================================================
 
 class TravelPricingEngine:
     """
-    Core pricing engine — enterprise edition.
+    Core pricing engine — enterprise edition v4.0.
     All calculations are client-scoped.
     Rule engine applies dynamic adjustments.
     Room calculator handles occupancy.
     Transport pricing type support (per_person/per_vehicle).
+    Transport trip type support (one_way/return/both) with return_rate_multiplier.
     Add-on peak/off rates.
     Flight component support (one_way/return via Amadeus).
     Live hotel support (Amadeus Hotel Offers API total price).
@@ -468,6 +564,15 @@ class TravelPricingEngine:
         - Does NOT multiply by nights/pax/rooms
         - hotel entity_type rules are SKIPPED
         - Global rules and margin still apply
+
+    Transport Trip Type Modes (new in v4.0):
+      trip_type = "one_way" (in payload):
+        - Base transport cost only
+      trip_type = "return" (in payload):
+        - IF transport.trip_type IN ('both', 'return'):
+          base × return_rate_multiplier
+        - IF transport.trip_type = 'one_way':
+          base cost only (transport does not support return)
     """
 
     def __init__(self, db_connection, client_id: int = 1):
@@ -488,6 +593,10 @@ class TravelPricingEngine:
         Supports two hotel source modes controlled by payload['hotel_source']:
           "admin" (default) — existing DB hotel pricing logic
           "live"            — Amadeus total stay price passthrough
+
+        Supports trip type via payload['trip_type']:
+          "one_way" — base transport cost
+          "return"  — base transport cost × return_rate_multiplier (if transport supports it)
         """
         self._validate_inputs(payload)
 
@@ -506,6 +615,12 @@ class TravelPricingEngine:
         kasol_sharing = payload.get('kasolSharing', '')
         per_night_kasol = payload.get('perNightKasolSharing', {})
         addon_keys = payload.get('addons', [])
+
+        # Trip type from user selection: 'one_way' or 'return'
+        # Default is 'return' (per UI requirement)
+        user_trip_type = payload.get('trip_type', 'return').lower().strip()
+        if user_trip_type not in ('one_way', 'return'):
+            user_trip_type = 'return'
 
         # Hotel source flag — controls which hotel pricing path to use
         hotel_source = payload.get('hotel_source', 'admin').lower().strip()
@@ -545,34 +660,38 @@ class TravelPricingEngine:
             rooms = room_alloc['rooms']
             room_allocation = room_alloc
 
-        # Calculate component costs
-        # HOTEL COST — branched by hotel_source
+        # ---- HOTEL COST (branched by hotel_source) ----
         if hotel_source == 'live':
-            # Live hotel: Amadeus total price, no further multiplication
             hotel_cost = LiveHotelCostCalculator.calculate(live_hotel_payload)
             logger.info(f"Hotel path: LIVE — hotel_cost={hotel_cost}")
         else:
-            # Admin hotel: existing per-person per-night logic
             hotel_cost = self._calculate_hotel_cost(
                 hotel_key, nights, rooms, adults, children, season,
                 per_night_hotels, kasol_sharing, per_night_kasol
             )
             logger.info(f"Hotel path: ADMIN — hotel_cost={hotel_cost}")
 
-        transport_cost = self._calculate_transport_cost(
-            transport_key, adults, children, season
+        # ---- TRANSPORT COST (with trip type support) ----
+        transport_cost, transport_meta = self._calculate_transport_cost(
+            transport_key, adults, children, season, user_trip_type
         )
+
+        # ---- SIGHTSEEING COST ----
         sightseeing_cost = self._calculate_sightseeing_cost(
             days_list, adults, children, season, cab_key
         )
+
+        # ---- CAB COST ----
         cab_cost = self._calculate_cab_cost(
             cab_key, days_list
         )
+
+        # ---- ADDON COST ----
         addon_cost = self._calculate_addon_cost(
             addon_keys, adults, children, nights, season
         )
 
-        # Flight cost — calculated by FlightCostCalculator (single source of truth)
+        # ---- FLIGHT COST ----
         flight_cost = FlightCostCalculator.calculate(flight_payload, adults, children)
 
         # Build costs dict for rule engine
@@ -601,10 +720,10 @@ class TravelPricingEngine:
             'sightseeing_days': len([d for d in days_list if d != 'N/A']),
             'has_flight': flight_cost > 0,
             'hotel_source': hotel_source,
+            'trip_type': user_trip_type,
         }
 
-        # Apply pricing rules — hotel_source passed so hotel-entity rules can
-        # be skipped in live hotel mode
+        # Apply pricing rules
         costs, applied_rules = self.rule_engine.process_rules(
             rule_context, costs, hotel_source=hotel_source
         )
@@ -655,9 +774,11 @@ class TravelPricingEngine:
             'adults': adults,
             'children': children,
             'hotelSource': hotel_source,
+            'tripType': user_trip_type,
+            'transportMeta': transport_meta,
         }
 
-        # If live hotel, include metadata for display
+        # Live hotel metadata for display
         if hotel_source == 'live' and live_hotel_payload:
             result['liveHotelMeta'] = {
                 'hotelName': live_hotel_payload.get('live_hotel_name', ''),
@@ -693,7 +814,7 @@ class TravelPricingEngine:
         cursor.execute(
             """SELECT id, name, currency, service_percent, booking_percent, is_domestic
                FROM regions
-               WHERE id = %s AND client_id = %s AND active = TRUE AND deleted = FALSE""",
+               WHERE id = %s AND client_id = %s AND active = TRUE""",
             (region_id, self.client_id)
         )
         row = cursor.fetchone()
@@ -737,7 +858,7 @@ class TravelPricingEngine:
                       child_age_limit,
                       adult_rate_peak, child_rate_peak, adult_rate_off, child_rate_off
                FROM hotels
-               WHERE internal_name = %s AND client_id = %s AND active = TRUE AND deleted = FALSE""",
+               WHERE internal_name = %s AND client_id = %s AND active = TRUE""",
             (internal_name, self.client_id)
         )
         row = cursor.fetchone()
@@ -795,45 +916,50 @@ class TravelPricingEngine:
         return total.quantize(Decimal('0.01'), ROUND_HALF_UP)
 
     # -------------------------------------------------
-    # TRANSPORT COST (WITH PRICING TYPE SUPPORT)
+    # TRANSPORT COST (WITH TRIP TYPE + PRICING TYPE SUPPORT)
     # -------------------------------------------------
 
     def _calculate_transport_cost(
-        self, transport_key, adults, children, season
-    ) -> Decimal:
+        self, transport_key: str, adults: int, children: int, season: str, user_trip_type: str
+    ) -> Tuple[Decimal, Dict]:
+        """
+        Calculate transport cost using TransportCostCalculator.
+
+        Returns:
+            Tuple of (Decimal cost, Dict metadata for display)
+        """
         if not transport_key or transport_key == 'NONE':
-            return Decimal('0')
+            return Decimal('0'), {}
 
         cursor = self.db.cursor()
         cursor.execute(
             """SELECT adult_rate_peak, child_rate_peak, peak_pricing_type,
-                      adult_rate_off, child_rate_off, off_pricing_type
+                      adult_rate_off, child_rate_off, off_pricing_type,
+                      trip_type, return_rate_multiplier
                FROM transports
-               WHERE transport_type = %s AND client_id = %s AND active = TRUE AND deleted = FALSE""",
+               WHERE transport_type = %s AND client_id = %s AND active = TRUE""",
             (transport_key, self.client_id)
         )
         row = cursor.fetchone()
         if not row:
-            return Decimal('0')
+            return Decimal('0'), {}
 
-        if season == 'ON':
-            adult_rate = Decimal(str(row[0]))
-            child_rate = Decimal(str(row[1]))
-            pricing_type = row[2]
-        else:
-            adult_rate = Decimal(str(row[3]))
-            child_rate = Decimal(str(row[4]))
-            pricing_type = row[5]
+        transport_trip_type = row[6] or 'both'
+        return_multiplier = Decimal(str(row[7])) if row[7] else Decimal('1.8')
 
-        # Calculate based on pricing type
-        if pricing_type == 'per_vehicle':
-            # Use adult_rate as full vehicle cost, ignore child_rate and pax
-            total = adult_rate
-        else:
-            # Default: per_person
-            total = (adult_rate * adults) + (child_rate * children)
+        cost = TransportCostCalculator.calculate(row, adults, children, season, user_trip_type)
 
-        return total.quantize(Decimal('0.01'), ROUND_HALF_UP)
+        # Build metadata for the response (informational, not used in math elsewhere)
+        meta = {
+            'trip_type': user_trip_type,
+            'transport_trip_type': transport_trip_type,
+            'return_multiplier_applied': (
+                user_trip_type == 'return' and transport_trip_type in ('both', 'return')
+            ),
+            'return_rate_multiplier': float(return_multiplier),
+        }
+
+        return cost, meta
 
     # -------------------------------------------------
     # SIGHTSEEING COST
@@ -856,7 +982,7 @@ class TravelPricingEngine:
             cursor.execute(
                 """SELECT base_rate, per_day_rate, is_special, four_by_four_rate
                    FROM destinations
-                   WHERE internal_name = %s AND client_id = %s AND active = TRUE AND deleted = FALSE""",
+                   WHERE internal_name = %s AND client_id = %s AND active = TRUE""",
                 (dest_key, self.client_id)
             )
             row = cursor.fetchone()
@@ -894,16 +1020,14 @@ class TravelPricingEngine:
         cursor.execute(
             """SELECT base_rate, per_day_rate
                FROM cabs
-               WHERE internal_name = %s AND client_id = %s AND active = TRUE AND deleted = FALSE""",
+               WHERE internal_name = %s AND client_id = %s AND active = TRUE""",
             (cab_key, self.client_id)
         )
         row = cursor.fetchone()
         if not row:
             return Decimal('0')
 
-        base_rate = Decimal(str(row[0]))
         per_day_rate = Decimal(str(row[1]))
-
         total = Decimal('0')
 
         for dest_key in active_days:
@@ -948,7 +1072,7 @@ class TravelPricingEngine:
             cursor.execute(
                 """SELECT pricing_type, rate_peak, rate_off
                    FROM addons
-                   WHERE internal_name = %s AND client_id = %s AND active = TRUE AND deleted = FALSE""",
+                   WHERE internal_name = %s AND client_id = %s AND active = TRUE""",
                 (addon_key, self.client_id)
             )
             row = cursor.fetchone()

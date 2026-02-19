@@ -145,6 +145,11 @@
         .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
         .modal-footer .btn{flex:1;min-width:80px}
 
+        /* ===== CONFIRM MODAL ===== */
+        .confirm-modal-content{max-width:420px}
+        .confirm-modal-msg{font-size:14px;color:#333;margin-bottom:8px}
+        .confirm-modal-detail{font-size:12px;color:#888}
+
         /* ===== INFO BOXES ===== */
         .info-box{background:#e3f2fd;border-left:4px solid #2196f3;padding:11px 14px;margin-bottom:18px;border-radius:6px;font-size:13px;color:#1976d2}
         .info-box-ai{background:#fce4ec;border-left:4px solid #e91e63;padding:11px 14px;margin-bottom:18px;border-radius:6px;font-size:13px;color:#880e4f}
@@ -197,6 +202,10 @@
         .clarification-box{background:#fff3cd;border-left:4px solid #ffc107;padding:11px 14px;margin-top:11px;border-radius:6px;font-size:13px;color:#856404;display:none}
         .clarification-box.show{display:block}
 
+        /* ===== MULTIPLIER FIELD VISIBILITY ===== */
+        .multiplier-group{transition:opacity .2s}
+        .multiplier-group.hidden-field{opacity:0.4;pointer-events:none}
+
         /* ===== MOBILE NAV ===== */
         .mobile-tab-scroll{
             display:none;
@@ -206,16 +215,12 @@
         }
 
         /* ===== RESPONSIVE BREAKPOINTS ===== */
-
-        /* Tablets (900px and below) */
         @media (max-width:900px){
             .container{padding:0 12px;margin:14px auto}
             .form-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
             .rate-grid{grid-template-columns:1fr 1fr}
             .header{padding:12px 16px}
         }
-
-        /* Small tablets and large phones (700px and below) */
         @media (max-width:700px){
             .header{padding:10px 14px}
             .header h1{font-size:15px}
@@ -236,8 +241,6 @@
             .btn{font-size:12px;padding:8px 16px}
             .btn-sm{font-size:10px;padding:4px 9px}
         }
-
-        /* Mobile phones (480px and below) */
         @media (max-width:480px){
             .header{padding:10px 12px;gap:8px}
             .header h1{font-size:13px}
@@ -248,11 +251,10 @@
             .section-header{font-size:15px;margin-bottom:12px;padding-bottom:8px}
             .tabs{
                 padding:7px;border-radius:8px;gap:3px;
-                /* Make tabs wrap on very small screens */
                 flex-wrap:wrap;
             }
             .tab{font-size:10px;padding:7px 9px;min-height:32px;border-radius:5px}
-            .form-group input,.form-group select,.form-group textarea{font-size:16px;/* Prevents iOS auto-zoom */}
+            .form-group input,.form-group select,.form-group textarea{font-size:16px;}
             td{font-size:11px;padding:8px 7px}
             th{font-size:10px;padding:8px 7px}
             .actions{gap:4px}
@@ -269,8 +271,6 @@
             .modal-footer{flex-direction:column}
             .modal-footer .btn{width:100%}
         }
-
-        /* Very small phones */
         @media (max-width:360px){
             .header h1{font-size:12px}
             .tab{font-size:9px;padding:6px 7px}
@@ -381,6 +381,19 @@
                 <div class="form-grid">
                     <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="transportRegion"></select></div>
                     <div class="form-group"><label>Transport Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Volvo AC Bus"></div>
+                    <div class="form-group">
+                        <label>Trip Type <span class="req">*</span></label>
+                        <select name="trip_type" id="transportTripType" required onchange="onTripTypeChange('transportTripType','transportReturnMultiplierGrp')">
+                            <option value="">Select Trip Type</option>
+                            <option value="one_way">One Way</option>
+                            <option value="return">Return</option>
+                            <option value="both">Both</option>
+                        </select>
+                    </div>
+                    <div class="form-group multiplier-group hidden-field" id="transportReturnMultiplierGrp">
+                        <label>Return Rate Multiplier <span class="req">*</span></label>
+                        <input type="number" step="0.01" name="return_rate_multiplier" id="transportReturnMultiplier" value="1.8" min="0" placeholder="1.8">
+                    </div>
                 </div>
                 <div class="rate-grid">
                     <div class="rate-section">
@@ -418,7 +431,7 @@
                 <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
                 <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
-            <div class="table-container"><table id="transportsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Peak Adult</th><th>Peak Child</th><th>Peak Type</th><th>Off Adult</th><th>Off Child</th><th>Off Type</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+            <div class="table-container"><table id="transportsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Trip Type</th><th>Return Mult.</th><th>Peak Adult</th><th>Peak Child</th><th>Peak Type</th><th>Off Adult</th><th>Off Child</th><th>Off Type</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 
@@ -682,6 +695,21 @@
     </div>
 </div>
 
+<!-- Confirm Delete Modal -->
+<div class="modal" id="confirmModal">
+    <div class="modal-content confirm-modal-content">
+        <div class="modal-header">⚠️ Confirm Delete</div>
+        <div id="confirmModalBody">
+            <p class="confirm-modal-msg">Are you sure you want to permanently delete this item?</p>
+            <p class="confirm-modal-detail">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const API = window.location.origin;
 let currentClientId = 1;
@@ -698,7 +726,6 @@ document.querySelectorAll('.tab').forEach(t => {
         document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
         t.classList.add('active');
         document.getElementById(t.dataset.tab).classList.add('active');
-        // Scroll tab into view on mobile
         t.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
     });
 });
@@ -707,7 +734,6 @@ function showMsg(text, type='success') {
     const m = document.getElementById('message');
     m.textContent = text; m.className = `msg ${type} show`;
     setTimeout(() => m.classList.remove('show'), 5000);
-    // Scroll to top to show message
     window.scrollTo({top:0,behavior:'smooth'});
 }
 function closeModal() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('show')); }
@@ -728,7 +754,6 @@ async function loadAll() {
     await Promise.all([loadRegions(), loadTransports(), loadDestinations(), loadHotels(), loadCabs(), loadAddons(), loadCabDestMatrix(), loadRules(), loadGlobalRules()]);
 }
 
-// Helper functions for region filtering
 function getRegionById(regionId) {
     return allRegions.find(r => r.id === regionId);
 }
@@ -755,6 +780,79 @@ function setRegionFilter(filter) {
     displayAddons();
 }
 
+// ===== TRIP TYPE TOGGLE =====
+function onTripTypeChange(selectId, multiplierGrpId) {
+    const val = document.getElementById(selectId).value;
+    const grp = document.getElementById(multiplierGrpId);
+    const input = grp ? grp.querySelector('input') : null;
+    if (!grp) return;
+    if (val === 'one_way' || val === '') {
+        grp.classList.add('hidden-field');
+        if (input) input.removeAttribute('required');
+    } else {
+        grp.classList.remove('hidden-field');
+        if (input) input.setAttribute('required', 'required');
+    }
+}
+
+// ===== HARD DELETE WITH CONFIRM MODAL + DOM REMOVAL =====
+let _pendingDeleteResolve = null;
+
+function confirmDelete(message, detail) {
+    return new Promise((resolve) => {
+        _pendingDeleteResolve = resolve;
+        const body = document.getElementById('confirmModalBody');
+        body.innerHTML = `<p class="confirm-modal-msg">${message}</p><p class="confirm-modal-detail">${detail || 'This action cannot be undone.'}</p>`;
+        document.getElementById('confirmModal').classList.add('show');
+        document.getElementById('confirmDeleteBtn').onclick = () => {
+            closeModal();
+            resolve(true);
+        };
+    });
+}
+
+async function deleteEntity(type, id, rowEl) {
+    const confirmed = await confirmDelete(
+        'Are you sure you want to permanently delete this item?',
+        `Type: ${type} | ID: ${id} — This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`${API}/api/${type}/${id}`, {method:'DELETE'});
+        let errMsg = 'Failed to delete';
+        if (!res.ok) {
+            try { const err = await res.json(); errMsg = err.error || errMsg; } catch(e) {}
+            showMsg(errMsg, 'error');
+            return;
+        }
+        showMsg('Item deleted successfully');
+        // Remove the row from DOM if provided
+        if (rowEl) {
+            const tr = rowEl.closest('tr');
+            if (tr) {
+                tr.style.transition = 'opacity 0.3s';
+                tr.style.opacity = '0';
+                setTimeout(() => tr.remove(), 300);
+            }
+        } else {
+            // Fallback: reload the relevant section
+            await loadAll();
+        }
+    } catch (e) {
+        console.error('Delete error:', e);
+        showMsg('Failed to delete — network error', 'error');
+    }
+}
+
+// Close modal on backdrop click
+document.getElementById('confirmModal').addEventListener('click', function(e){
+    if(e.target === this) { closeModal(); }
+});
+document.getElementById('editModal').addEventListener('click', function(e){
+    if(e.target === this) closeModal();
+});
+
 // ===== CLIENTS =====
 async function loadClients() {
     try {
@@ -772,13 +870,13 @@ async function loadClients() {
 
 function displayClients() {
     const tb = document.querySelector('#clientsTable tbody');
-    tb.innerHTML = allClients.map(c => `<tr class="${c.active?'':'inactive'}">
+    tb.innerHTML = allClients.map(c => `<tr class="${c.active?'':'inactive'}" id="client-row-${c.id}">
         <td>${c.id}</td><td>${c.name}</td><td>${c.code}</td><td>${c.contact_email||'-'}</td><td>${c.currency_default}</td>
         <td><span class="badge ${c.active?'badge-active':'badge-inactive'}">${c.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${c.active?'checked':''} onchange="toggleEntity('clients',${c.id},this.checked)"><span class="toggle-slider"></span></label>
             <button class="btn btn-sm" onclick="editClient(${c.id})">Edit</button>
-            ${c.id!==1?`<button class="btn btn-sm btn-danger" onclick="deleteEntity('clients',${c.id})">Del</button>`:''}
+            ${c.id!==1?`<button class="btn btn-sm btn-danger" onclick="deleteEntity('clients',${c.id},this)">Del</button>`:''}
         </div></td></tr>`).join('');
 }
 
@@ -821,20 +919,6 @@ async function toggleEntity(type, id, active) {
     }
 }
 
-async function deleteEntity(type, id) {
-    if(!confirm('Delete this item?')) return;
-    try {
-        const res = await fetch(`${API}/api/${type}/${id}`, {method:'DELETE'});
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        showMsg('Deleted');
-        loadAll();
-    } catch (e) {
-        console.error('Delete error:', e);
-        showMsg('Failed to delete', 'error');
-        loadAll();
-    }
-}
-
 // ===== REGIONS =====
 async function loadRegions() {
     try {
@@ -869,13 +953,13 @@ function displayRegions() {
 }
 
 function renderRegionRow(r) {
-    return `<tr class="${r.active?'':'inactive'}">
+    return `<tr class="${r.active?'':'inactive'}" id="region-row-${r.id}">
         <td>${r.id}</td><td>${r.name}</td><td>${r.currency}</td><td>${r.service_percent}%</td><td>${r.booking_percent}%</td>
         <td><span class="badge ${r.active?'badge-active':'badge-inactive'}">${r.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${r.active?'checked':''} onchange="toggleEntity('regions',${r.id},this.checked)"><span class="toggle-slider"></span></label>
             <button class="btn btn-sm" onclick="editRegion(${r.id})">Edit</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('regions',${r.id})">Del</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('regions',${r.id},this)">Del</button>
         </div></td></tr>`;
 }
 
@@ -937,35 +1021,100 @@ function displayTransports() {
     const filtered = allTransports.filter(t => matchesRegionFilter(t));
     const tb=document.querySelector('#transportsTable tbody');
     if (filtered.length === 0) {
-        tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999;padding:24px">No transports found for selected filter</td></tr>';
+        tb.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#999;padding:24px">No transports found for selected filter</td></tr>';
         return;
     }
     tb.innerHTML=filtered.map(t=>{
         const r=getRegionById(t.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
-        return `<tr class="${t.active?'':'inactive'}">
+        const tripType = t.trip_type || 'one_way';
+        const retMult = (tripType !== 'one_way' && t.return_rate_multiplier != null) ? t.return_rate_multiplier : '-';
+        return `<tr class="${t.active?'':'inactive'}" id="transport-row-${t.id}">
         <td>${t.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${t.name}</td>
+        <td><span class="badge badge-domestic">${tripType}</span></td>
+        <td>${retMult}</td>
         <td>${t.adult_rate_peak}</td><td>${t.child_rate_peak}</td><td>${t.peak_pricing_type||'per_person'}</td>
         <td>${t.adult_rate_off}</td><td>${t.child_rate_off}</td><td>${t.off_pricing_type||'per_person'}</td>
         <td><span class="badge ${t.active?'badge-active':'badge-inactive'}">${t.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${t.active?'checked':''} onchange="toggleEntity('transports',${t.id},this.checked)"><span class="toggle-slider"></span></label>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('transports',${t.id})">Del</button>
+            <button class="btn btn-sm" onclick="editTransport(${t.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('transports',${t.id},this)">Del</button>
         </div></td></tr>`;
     }).join('');
 }
 
 document.getElementById('transportForm').addEventListener('submit', async e => {
     e.preventDefault();
+    const tripTypeVal = document.getElementById('transportTripType').value;
+    if (!tripTypeVal) { showMsg('Please select a Trip Type', 'error'); return; }
+
+    const multInput = document.getElementById('transportReturnMultiplier');
+    let returnMultiplier = parseFloat(multInput.value);
+
+    if (tripTypeVal === 'one_way') {
+        returnMultiplier = 1.0;
+    } else {
+        if (isNaN(returnMultiplier)) { showMsg('Return Rate Multiplier must be a number', 'error'); return; }
+    }
+
     try {
-        const d=Object.fromEntries(new FormData(e.target)); d.client_id=currentClientId;
+        const d=Object.fromEntries(new FormData(e.target));
+        d.client_id=currentClientId;
+        d.trip_type = tripTypeVal;
+        d.return_rate_multiplier = returnMultiplier;
         const res=await fetch(`${API}/api/transports`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
-        if(res.ok){showMsg('Transport created');e.target.reset();await loadTransports();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+        if(res.ok){showMsg('Transport created');e.target.reset();document.getElementById('transportReturnMultiplierGrp').classList.add('hidden-field');await loadTransports();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
     } catch (e) {
         console.error('Create transport error:', e);
         showMsg('Failed to create transport', 'error');
     }
 });
+
+function editTransport(id) {
+    const t = allTransports.find(x => x.id === id);
+    if (!t) return;
+    currentEditItem = t;
+    currentEditType = 'transport';
+
+    const tripType = t.trip_type || 'one_way';
+    const retMult = t.return_rate_multiplier != null ? t.return_rate_multiplier : 1.8;
+    const isOneWay = tripType === 'one_way';
+
+    document.getElementById('editModalBody').innerHTML = `
+        <div class="form-grid">
+            <div class="form-group"><label>Transport Name</label><input type="text" id="editTransName" value="${t.name}"></div>
+            <div class="form-group"><label>Trip Type <span class="req">*</span></label>
+                <select id="editTransTripType" onchange="onTripTypeChange('editTransTripType','editTransMultGrp')">
+                    <option value="one_way" ${tripType==='one_way'?'selected':''}>One Way</option>
+                    <option value="return" ${tripType==='return'?'selected':''}>Return</option>
+                    <option value="both" ${tripType==='both'?'selected':''}>Both</option>
+                </select>
+            </div>
+            <div class="form-group multiplier-group ${isOneWay ? 'hidden-field' : ''}" id="editTransMultGrp">
+                <label>Return Rate Multiplier</label>
+                <input type="number" step="0.01" id="editTransReturnMult" value="${retMult}" min="0">
+            </div>
+            <div class="form-group"><label>Peak Adult Rate</label><input type="number" step="0.01" id="editTransPeakAdult" value="${t.adult_rate_peak}"></div>
+            <div class="form-group"><label>Peak Child Rate</label><input type="number" step="0.01" id="editTransPeakChild" value="${t.child_rate_peak}"></div>
+            <div class="form-group"><label>Peak Pricing Type</label>
+                <select id="editTransPeakType">
+                    <option value="per_person" ${(t.peak_pricing_type||'per_person')==='per_person'?'selected':''}>Per Person</option>
+                    <option value="per_vehicle" ${t.peak_pricing_type==='per_vehicle'?'selected':''}>Per Vehicle</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Off Adult Rate</label><input type="number" step="0.01" id="editTransOffAdult" value="${t.adult_rate_off}"></div>
+            <div class="form-group"><label>Off Child Rate</label><input type="number" step="0.01" id="editTransOffChild" value="${t.child_rate_off}"></div>
+            <div class="form-group"><label>Off Pricing Type</label>
+                <select id="editTransOffType">
+                    <option value="per_person" ${(t.off_pricing_type||'per_person')==='per_person'?'selected':''}>Per Person</option>
+                    <option value="per_vehicle" ${t.off_pricing_type==='per_vehicle'?'selected':''}>Per Vehicle</option>
+                </select>
+            </div>
+        </div>`;
+    document.getElementById('editModalTitle').textContent = 'Edit Transport';
+    document.getElementById('editModal').classList.add('show');
+}
 
 // ===== DESTINATIONS =====
 async function loadDestinations() {
@@ -990,13 +1139,13 @@ function displayDestinations() {
     tb.innerHTML=filtered.map(d=>{
         const r=getRegionById(d.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
-        return `<tr class="${d.active?'':'inactive'}">
+        return `<tr class="${d.active?'':'inactive'}" id="destination-row-${d.id}">
         <td>${d.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${d.name}</td><td>${d.base_rate}</td><td>${d.per_day_rate}</td>
         <td>${d.is_special?'<span class="badge badge-domestic">Special</span>':'-'}</td>
         <td><span class="badge ${d.active?'badge-active':'badge-inactive'}">${d.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${d.active?'checked':''} onchange="toggleEntity('destinations',${d.id},this.checked)"><span class="toggle-slider"></span></label>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('destinations',${d.id})">Del</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('destinations',${d.id},this)">Del</button>
         </div></td></tr>`;
     }).join('');
 }
@@ -1041,13 +1190,13 @@ function displayHotels() {
         if(sh==='CUSTOM'&&h.custom_sharing_name)sh=`${h.custom_sharing_name}(${h.sharing_capacity})`;
         else if(sh==='DOUBLE')sh='Double(2)';
         else if(sh==='QUAD')sh='Quad(4)';
-        return `<tr class="${h.active?'':'inactive'}">
+        return `<tr class="${h.active?'':'inactive'}" id="hotel-row-${h.id}">
         <td>${h.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${h.name}</td><td>${sh}</td>
         <td>${h.adult_rate_peak}</td><td>${h.child_rate_peak}</td><td>${h.adult_rate_off}</td><td>${h.child_rate_off}</td>
         <td><span class="badge ${h.active?'badge-active':'badge-inactive'}">${h.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${h.active?'checked':''} onchange="toggleEntity('hotels',${h.id},this.checked)"><span class="toggle-slider"></span></label>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('hotels',${h.id})">Del</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('hotels',${h.id},this)">Del</button>
         </div></td></tr>`;
     }).join('');
 }
@@ -1087,12 +1236,12 @@ function displayCabs() {
     tb.innerHTML=filtered.map(c=>{
         const r=getRegionById(c.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
-        return `<tr class="${c.active?'':'inactive'}">
+        return `<tr class="${c.active?'':'inactive'}" id="cab-row-${c.id}">
         <td>${c.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${c.name}</td><td>${c.base_rate}</td><td>${c.per_day_rate}</td>
         <td><span class="badge ${c.active?'badge-active':'badge-inactive'}">${c.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${c.active?'checked':''} onchange="toggleEntity('cabs',${c.id},this.checked)"><span class="toggle-slider"></span></label>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('cabs',${c.id})">Del</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('cabs',${c.id},this)">Del</button>
         </div></td></tr>`;
     }).join('');
 }
@@ -1277,13 +1426,13 @@ function displayAddons() {
     tb.innerHTML=filtered.map(a=>{
         const r=getRegionById(a.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
-        return `<tr class="${a.active?'':'inactive'}">
+        return `<tr class="${a.active?'':'inactive'}" id="addon-row-${a.id}">
         <td>${a.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${a.name}</td><td>${a.addon_type||'-'}</td><td>${a.pricing_type}</td>
         <td>${a.rate_peak||0}</td><td>${a.rate_off||0}</td>
         <td><span class="badge ${a.active?'badge-active':'badge-inactive'}">${a.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${a.active?'checked':''} onchange="toggleEntity('addons',${a.id},this.checked)"><span class="toggle-slider"></span></label>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('addons',${a.id})">Del</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('addons',${a.id},this)">Del</button>
         </div></td></tr>`;
     }).join('');
 }
@@ -1323,7 +1472,7 @@ function displayRules() {
     tb.innerHTML=allRules.map(r=>{
         const cond=typeof r.conditions_json==='string'?r.conditions_json:JSON.stringify(r.conditions_json);
         const act=typeof r.actions_json==='string'?r.actions_json:JSON.stringify(r.actions_json);
-        return `<tr class="${r.active?'':'inactive'}">
+        return `<tr class="${r.active?'':'inactive'}" id="rule-row-${r.id}">
         <td>${r.id}</td><td>${r.name}</td><td>${r.entity_type}</td><td>${r.entity_id||'All'}</td>
         <td>${r.priority}</td><td>${r.stackable?'Yes':'No'}</td>
         <td><code style="font-size:10px;word-break:break-all;max-width:120px;display:block">${cond}</code></td>
@@ -1331,7 +1480,7 @@ function displayRules() {
         <td><span class="badge ${r.active?'badge-active':'badge-inactive'}">${r.active?'Active':'Inactive'}</span></td>
         <td><div class="actions">
             <label class="toggle-switch"><input type="checkbox" ${r.active?'checked':''} onchange="toggleEntity('pricing-rules',${r.id},this.checked)"><span class="toggle-slider"></span></label>
-            <button class="btn btn-sm btn-danger" onclick="deleteEntity('pricing-rules',${r.id})">Del</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEntity('pricing-rules',${r.id},this)">Del</button>
         </div></td></tr>`;
     }).join('') || '<tr><td colspan="10" class="empty-state"><div class="empty-state-icon">📐</div>No rules</td></tr>';
 }
@@ -1483,16 +1632,34 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
                 is_domestic:document.getElementById('editRegionType').value};
             await fetch(`${API}/api/regions/${currentEditItem.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
             showMsg('Region updated');closeModal();await loadRegions();
+        } else if(currentEditType==='transport'){
+            const tripTypeVal = document.getElementById('editTransTripType').value;
+            if (!tripTypeVal) { showMsg('Please select a Trip Type', 'error'); return; }
+            let returnMultiplier = parseFloat(document.getElementById('editTransReturnMult').value);
+            if (tripTypeVal === 'one_way') {
+                returnMultiplier = 1.0;
+            } else {
+                if (isNaN(returnMultiplier)) { showMsg('Return Rate Multiplier must be a number', 'error'); return; }
+            }
+            const d = {
+                name: document.getElementById('editTransName').value,
+                trip_type: tripTypeVal,
+                return_rate_multiplier: returnMultiplier,
+                adult_rate_peak: parseFloat(document.getElementById('editTransPeakAdult').value)||0,
+                child_rate_peak: parseFloat(document.getElementById('editTransPeakChild').value)||0,
+                peak_pricing_type: document.getElementById('editTransPeakType').value,
+                adult_rate_off: parseFloat(document.getElementById('editTransOffAdult').value)||0,
+                child_rate_off: parseFloat(document.getElementById('editTransOffChild').value)||0,
+                off_pricing_type: document.getElementById('editTransOffType').value,
+            };
+            const res = await fetch(`${API}/api/transports/${currentEditItem.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+            if (res.ok) { showMsg('Transport updated'); closeModal(); await loadTransports(); }
+            else { const err = await res.json(); showMsg(err.error||'Failed to update transport','error'); }
         }
     } catch (e) {
         console.error('Save edit error:', e);
         showMsg('Failed to save changes', 'error');
     }
-});
-
-// Close modal on backdrop click
-document.getElementById('editModal').addEventListener('click', function(e){
-    if(e.target === this) closeModal();
 });
 
 // ===== INIT =====

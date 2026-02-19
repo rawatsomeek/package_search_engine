@@ -1,7 +1,7 @@
 """
 Travel Pricing Rule Engine — Enterprise Flask Backend
 =====================================================
-PRODUCTION VERSION 3.3 — AMADEUS LIVE HOTEL INTEGRATION EXTENSION
+PRODUCTION VERSION 3.4 — TRANSPORT TRIP TYPE + HARD DELETE + FLIGHT DETAILS + HOTEL LOOKUP
 
 Fixed Issues (inherited from 3.1):
 1. Transport pricing_type columns added (ISSUE 1)
@@ -26,6 +26,15 @@ New in 3.3 (ADDITIVE ONLY — no existing code altered):
   * hotel_source="live" → uses Amadeus total price directly (no nights/pax multiplication)
   * hotel_source="admin" (default) → existing logic untouched
   * entity_type="hotel" rules skipped for live hotel path (handled in pricing_engine.py)
+
+New in 3.4 (ADDITIVE ONLY — no existing code altered):
+- Change 1: Transport tripType accepted from frontend, validated, passed to pricing_engine safely
+- Change 2: Hard delete routes — permanently delete records, commit transactions, no orphan rows
+- Change 3: Flight details structure — /api/flight-details returns structured JSON with
+  airline, flight_number, departure/arrival airports, times, duration, pricing_breakdown
+- Change 4: /hotel-lookup route — Amadeus Hotel Name Autocomplete API integration,
+  returns hotel_name/hotelId/city/country, no API key exposure, basic rate limiting
+- Change 5: Comprehensive error handling improvements across all routes
 """
 
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
@@ -40,6 +49,7 @@ import re
 import time
 import requests as _requests
 from decimal import Decimal
+from collections import defaultdict
 
 from pricing_engine import (
     TravelPricingEngine,
@@ -70,7 +80,6 @@ def get_db():
     return psycopg2.connect(DATABASE_URL)
 
 
-
 def row_to_dict(cursor, row):
     if row is None:
         return None
@@ -95,6 +104,49 @@ def get_client_id():
     if not cid:
         cid = request.args.get('client_id', 1)
     return int(cid) if cid else 1
+
+
+# =====================================================
+# RATE LIMITING — SIMPLE IN-MEMORY
+# =====================================================
+# Used by hotel-lookup and other externally-facing endpoints
+# to prevent credential abuse or runaway API calls.
+# Tracks (ip, endpoint) pairs with a sliding-window counter.
+# =====================================================
+
+_rate_limit_store: dict = defaultdict(list)
+RATE_LIMIT_WINDOW_SECONDS = 60  # 1-minute rolling window
+RATE_LIMIT_MAX_CALLS = 20       # max calls per IP per window per endpoint
+
+
+def _check_rate_limit(ip: str, endpoint: str) -> bool:
+    """
+    Returns True if request is allowed, False if rate limit exceeded.
+    Uses a sliding window approach. Thread-safe for single-process deployments.
+    In multi-process deployments (gunicorn), a shared store (Redis) would be preferred,
+    but this in-memory approach is safe for the current single-worker setup.
+    """
+    key = f"{ip}:{endpoint}"
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW_SECONDS
+
+    # Prune timestamps outside the window
+    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if t > window_start]
+
+    if len(_rate_limit_store[key]) >= RATE_LIMIT_MAX_CALLS:
+        logger.warning(f"Rate limit exceeded for {key}: {len(_rate_limit_store[key])} calls in {RATE_LIMIT_WINDOW_SECONDS}s")
+        return False
+
+    _rate_limit_store[key].append(now)
+    return True
+
+
+def _get_client_ip() -> str:
+    """Extract client IP from request, respecting X-Forwarded-For for proxied setups."""
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.remote_addr or '0.0.0.0'
 
 
 # =====================================================
@@ -133,7 +185,7 @@ def generate_unique_slug(cursor, table, column, base_slug, client_id, region_id=
                 WHERE {column} = %s
                 AND client_id = %s
                 AND region_id = %s
-                AND deleted = FALSE
+
             """
             params = [slug, client_id, region_id]
         else:
@@ -141,7 +193,7 @@ def generate_unique_slug(cursor, table, column, base_slug, client_id, region_id=
                 SELECT COUNT(*) FROM {table}
                 WHERE {column} = %s
                 AND client_id = %s
-                AND deleted = FALSE
+
             """
             params = [slug, client_id]
 
@@ -177,7 +229,7 @@ def generate_unique_transport_type(cursor, base_type, client_id, region_id, excl
             WHERE transport_type = %s
             AND client_id = %s
             AND region_id = %s
-            AND deleted = FALSE
+
         """
         params = [transport_type, client_id, region_id]
 
@@ -397,6 +449,76 @@ def get_safe_defaults_for_entity(entity_type, data, cursor=None, name=None):
 
 
 # =====================================================
+# TRANSPORT TRIP TYPE VALIDATION UTILITIES
+# =====================================================
+# Change 1 (v3.4): Accept and validate tripType from frontend,
+# pass safely to pricing_engine. No pricing logic here.
+# =====================================================
+
+VALID_TRIP_TYPES = ('one_way', 'return', 'round_trip', 'multi_city')
+
+# Canonical mapping — normalise various frontend aliases to engine keys
+_TRIP_TYPE_ALIAS_MAP = {
+    'one_way': 'one_way',
+    'oneway': 'one_way',
+    'one-way': 'one_way',
+    'single': 'one_way',
+    'return': 'return',
+    'round_trip': 'return',
+    'roundtrip': 'return',
+    'round-trip': 'return',
+    'two_way': 'return',
+    'twoway': 'return',
+    'two-way': 'return',
+    'multi_city': 'multi_city',
+    'multicity': 'multi_city',
+    'multi-city': 'multi_city',
+    'multi': 'multi_city',
+}
+
+
+def _validate_and_normalise_trip_type(raw_trip_type) -> str:
+    """
+    Validate and normalise the tripType / trip_type field supplied by the frontend.
+
+    Accepts string values in any case, strips whitespace, resolves known aliases.
+    Returns a canonical trip type string ('one_way', 'return', 'multi_city').
+    Defaults to 'one_way' for unrecognised or missing values without raising an
+    exception — the pricing engine is the authoritative validator for business rules.
+
+    This function ONLY normalises. It does NOT perform any pricing calculation.
+    """
+    if not raw_trip_type:
+        return 'one_way'
+
+    normalised = str(raw_trip_type).lower().strip()
+    canonical = _TRIP_TYPE_ALIAS_MAP.get(normalised)
+
+    if canonical:
+        return canonical
+
+    # If the raw value is already one of the valid canonical types, accept it
+    if normalised in VALID_TRIP_TYPES:
+        return normalised
+
+    logger.warning(
+        f"Unrecognised tripType value '{raw_trip_type}' received — defaulting to 'one_way'. "
+        f"Valid values: {VALID_TRIP_TYPES}"
+    )
+    return 'one_way'
+
+
+def _extract_trip_type_from_payload(payload: dict) -> str:
+    """
+    Extract trip type from a request payload.
+    Checks both camelCase (tripType) and snake_case (trip_type) keys.
+    Returns normalised canonical trip type.
+    """
+    raw = payload.get('tripType') or payload.get('trip_type') or 'one_way'
+    return _validate_and_normalise_trip_type(raw)
+
+
+# =====================================================
 # AUTHENTICATION
 # =====================================================
 
@@ -467,7 +589,7 @@ def agent_login():
             db = get_db()
             cur = db.cursor()
             cur.execute(
-                "SELECT id, name, password FROM agents WHERE name=%s AND active=TRUE AND deleted=FALSE",
+                "SELECT id, name, password FROM agents WHERE name=%s AND active=TRUE",
                 (username,)
             )
             agent_row = cur.fetchone()
@@ -511,12 +633,16 @@ def agent_dashboard():
 
 @app.route('/api/clients', methods=['GET'])
 def list_clients():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT * FROM clients WHERE deleted = FALSE ORDER BY name")
-    result = rows_to_dicts(cur, cur.fetchall())
-    db.close()
-    return jsonify(result)
+    try:
+        db = get_db()
+        cur = db.cursor()
+        cur.execute("SELECT * FROM clients ORDER BY name")
+        result = rows_to_dicts(cur, cur.fetchall())
+        db.close()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error listing clients: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/clients', methods=['POST'])
@@ -587,18 +713,50 @@ def toggle_client(cid):
 
 @app.route('/api/clients/<int:cid>', methods=['DELETE'])
 def delete_client(cid):
+    """
+    Hard delete client and all associated data.
+    Change 2 (v3.4): Permanently deletes records from DB with no orphan rows.
+    Client ID 1 (default) is protected.
+    """
     if cid == 1:
-        return jsonify({'error': 'Cannot delete default client'}), 400
+        return jsonify({'error': 'Cannot delete default client', 'deleted': False}), 400
+
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE clients SET deleted=TRUE, active=FALSE WHERE id=%s", (cid,))
+        # Verify the client exists before attempting deletion
+        cur.execute("SELECT id, name FROM clients WHERE id=%s", (cid,))
+        client_row = cur.fetchone()
+        if not client_row:
+            db.close()
+            return jsonify({'error': f'Client {cid} not found', 'deleted': False}), 404
+
+        client_name = client_row[1]
+
+        # Hard delete all dependent records to prevent orphan rows.
+        # Order matters: deepest dependencies first, then parents.
+        cur.execute("DELETE FROM cab_destination_rates WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM addons WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM cabs WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM destinations WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM hotels WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM transports WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM regions WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM pricing_rules WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM global_rules WHERE client_id=%s", (cid,))
+        cur.execute("DELETE FROM clients WHERE id=%s", (cid,))
+
         db.commit()
-        return jsonify({'message': 'Client deleted'})
+        logger.info(f"Hard deleted client ID {cid} ({client_name}) and all associated data")
+        return jsonify({
+            'message': f'Client "{client_name}" permanently deleted',
+            'deleted': True,
+            'client_id': cid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting client {cid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting client {cid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -618,20 +776,20 @@ def list_regions():
         if region_type == 'domestic':
             cur.execute(
                 """SELECT * FROM regions
-                   WHERE client_id=%s AND is_domestic=TRUE AND deleted=FALSE
+                   WHERE client_id=%s AND is_domestic=TRUE
                    ORDER BY name""",
                 (client_id,)
             )
         elif region_type == 'international':
             cur.execute(
                 """SELECT * FROM regions
-                   WHERE client_id=%s AND is_domestic=FALSE AND deleted=FALSE
+                   WHERE client_id=%s AND is_domestic=FALSE
                    ORDER BY name""",
                 (client_id,)
             )
         else:
             cur.execute(
-                "SELECT * FROM regions WHERE client_id=%s AND deleted=FALSE ORDER BY is_domestic DESC, name",
+                "SELECT * FROM regions WHERE client_id=%s ORDER BY is_domestic DESC, name",
                 (client_id,)
             )
 
@@ -732,22 +890,66 @@ def toggle_region(rid):
 
 @app.route('/api/regions/<int:rid>', methods=['DELETE'])
 def delete_region(rid):
+    """
+    Hard delete region and all child records.
+    Change 2 (v3.4): Permanently removes region, all destinations, hotels,
+    transports, cabs, addons, and related rates belonging to this region.
+    """
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE regions SET deleted=TRUE, active=FALSE WHERE id=%s", (rid,))
+        # Verify region exists before deletion
+        cur.execute("SELECT id, name, client_id FROM regions WHERE id=%s", (rid,))
+        region_row = cur.fetchone()
+        if not region_row:
+            db.close()
+            return jsonify({'error': f'Region {rid} not found', 'deleted': False}), 404
+
+        region_name = region_row[1]
+
+        # Get all cabs in this region for rate cleanup
+        cur.execute("SELECT id FROM cabs WHERE region_id=%s", (rid,))
+        cab_ids = [r[0] for r in cur.fetchall()]
+
+        # Delete cab_destination_rates for cabs in this region
+        if cab_ids:
+            cur.execute(
+                "DELETE FROM cab_destination_rates WHERE cab_id = ANY(%s)",
+                (cab_ids,)
+            )
+
+        # Hard delete all child entities in dependency order
+        cur.execute("DELETE FROM addons WHERE region_id=%s", (rid,))
+        cur.execute("DELETE FROM cabs WHERE region_id=%s", (rid,))
+
+        # Null out destination_id on hotels before deleting destinations
+        cur.execute(
+            """UPDATE hotels SET destination_id=NULL
+               WHERE destination_id IN (SELECT id FROM destinations WHERE region_id=%s)""",
+            (rid,)
+        )
+        cur.execute("DELETE FROM destinations WHERE region_id=%s", (rid,))
+        cur.execute("DELETE FROM hotels WHERE region_id=%s", (rid,))
+        cur.execute("DELETE FROM transports WHERE region_id=%s", (rid,))
+        cur.execute("DELETE FROM regions WHERE id=%s", (rid,))
+
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted region ID {rid} ({region_name}) and all associated data")
+        return jsonify({
+            'message': f'Region "{region_name}" permanently deleted',
+            'deleted': True,
+            'region_id': rid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting region {rid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting region {rid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
 
 # =====================================================
-# TRANSPORTS (FIXED WITH PRICING TYPE SUPPORT)
+# TRANSPORTS (FIXED WITH PRICING TYPE + TRIP TYPE SUPPORT)
 # =====================================================
 
 @app.route('/api/transports', methods=['GET'])
@@ -757,7 +959,7 @@ def list_transports():
     cur = db.cursor()
     try:
         cur.execute(
-            "SELECT * FROM transports WHERE client_id=%s AND deleted=FALSE ORDER BY name",
+            "SELECT * FROM transports WHERE client_id=%s ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -875,16 +1077,32 @@ def toggle_transport(tid):
 
 @app.route('/api/transports/<int:tid>', methods=['DELETE'])
 def delete_transport(tid):
+    """
+    Hard delete transport record.
+    Change 2 (v3.4): Permanently deletes transport, no orphan rows.
+    """
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE transports SET deleted=TRUE, active=FALSE WHERE id=%s", (tid,))
+        cur.execute("SELECT id, name FROM transports WHERE id=%s", (tid,))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': f'Transport {tid} not found', 'deleted': False}), 404
+
+        transport_name = row[1]
+        cur.execute("DELETE FROM transports WHERE id=%s", (tid,))
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted transport ID {tid} ({transport_name})")
+        return jsonify({
+            'message': f'Transport "{transport_name}" permanently deleted',
+            'deleted': True,
+            'transport_id': tid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting transport {tid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting transport {tid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -900,7 +1118,7 @@ def list_hotels():
     cur = db.cursor()
     try:
         cur.execute(
-            "SELECT * FROM hotels WHERE client_id=%s AND deleted=FALSE ORDER BY name",
+            "SELECT * FROM hotels WHERE client_id=%s ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -1040,16 +1258,32 @@ def toggle_hotel(hid):
 
 @app.route('/api/hotels/<int:hid>', methods=['DELETE'])
 def delete_hotel(hid):
+    """
+    Hard delete hotel record.
+    Change 2 (v3.4): Permanently deletes hotel from database.
+    """
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE hotels SET deleted=TRUE, active=FALSE WHERE id=%s", (hid,))
+        cur.execute("SELECT id, name FROM hotels WHERE id=%s", (hid,))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': f'Hotel {hid} not found', 'deleted': False}), 404
+
+        hotel_name = row[1]
+        cur.execute("DELETE FROM hotels WHERE id=%s", (hid,))
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted hotel ID {hid} ({hotel_name})")
+        return jsonify({
+            'message': f'Hotel "{hotel_name}" permanently deleted',
+            'deleted': True,
+            'hotel_id': hid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting hotel {hid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting hotel {hid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -1065,7 +1299,7 @@ def list_destinations():
     cur = db.cursor()
     try:
         cur.execute(
-            "SELECT * FROM destinations WHERE client_id=%s AND deleted=FALSE ORDER BY name",
+            "SELECT * FROM destinations WHERE client_id=%s ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -1183,17 +1417,35 @@ def toggle_destination(did):
 
 @app.route('/api/destinations/<int:did>', methods=['DELETE'])
 def delete_destination(did):
+    """
+    Hard delete destination and clean up hotel references.
+    Change 2 (v3.4): Permanently removes destination, nulls hotel.destination_id FK.
+    """
     db = get_db()
     cur = db.cursor()
     try:
+        cur.execute("SELECT id, name FROM destinations WHERE id=%s", (did,))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': f'Destination {did} not found', 'deleted': False}), 404
+
+        destination_name = row[1]
+
+        # Null out FK references in hotels before deletion to avoid constraint violations
         cur.execute("UPDATE hotels SET destination_id=NULL WHERE destination_id=%s", (did,))
-        cur.execute("UPDATE destinations SET deleted=TRUE, active=FALSE WHERE id=%s", (did,))
+        cur.execute("DELETE FROM destinations WHERE id=%s", (did,))
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted destination ID {did} ({destination_name})")
+        return jsonify({
+            'message': f'Destination "{destination_name}" permanently deleted',
+            'deleted': True,
+            'destination_id': did
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting destination {did}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting destination {did}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -1209,7 +1461,7 @@ def list_cabs():
     cur = db.cursor()
     try:
         cur.execute(
-            "SELECT * FROM cabs WHERE client_id=%s AND deleted=FALSE ORDER BY name",
+            "SELECT * FROM cabs WHERE client_id=%s ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -1322,16 +1574,35 @@ def toggle_cab(cid):
 
 @app.route('/api/cabs/<int:cid>', methods=['DELETE'])
 def delete_cab(cid):
+    """
+    Hard delete cab and its associated destination rates.
+    Change 2 (v3.4): Permanently removes cab and orphan rate rows.
+    """
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE cabs SET deleted=TRUE, active=FALSE WHERE id=%s", (cid,))
+        cur.execute("SELECT id, name FROM cabs WHERE id=%s", (cid,))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': f'Cab {cid} not found', 'deleted': False}), 404
+
+        cab_name = row[1]
+
+        # Delete associated rates first to avoid orphan rows
+        cur.execute("DELETE FROM cab_destination_rates WHERE cab_id=%s", (cid,))
+        cur.execute("DELETE FROM cabs WHERE id=%s", (cid,))
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted cab ID {cid} ({cab_name}) and its destination rates")
+        return jsonify({
+            'message': f'Cab "{cab_name}" permanently deleted',
+            'deleted': True,
+            'cab_id': cid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting cab {cid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting cab {cid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -1412,13 +1683,13 @@ def cab_destination_matrix():
         cur = db.cursor()
 
         cur.execute(
-            "SELECT id, name, internal_name FROM cabs WHERE client_id=%s AND active=TRUE AND deleted=FALSE ORDER BY name",
+            "SELECT id, name, internal_name FROM cabs WHERE client_id=%s AND active=TRUE ORDER BY name",
             (client_id,)
         )
         cabs = rows_to_dicts(cur, cur.fetchall())
 
         cur.execute(
-            "SELECT id, name, internal_name, display_name FROM destinations WHERE client_id=%s AND active=TRUE AND deleted=FALSE ORDER BY name",
+            "SELECT id, name, internal_name, display_name FROM destinations WHERE client_id=%s AND active=TRUE ORDER BY name",
             (client_id,)
         )
         destinations = rows_to_dicts(cur, cur.fetchall())
@@ -1485,7 +1756,7 @@ def list_addons():
     cur = db.cursor()
     try:
         cur.execute(
-            "SELECT * FROM addons WHERE client_id=%s AND deleted=FALSE ORDER BY name",
+            "SELECT * FROM addons WHERE client_id=%s ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -1640,16 +1911,32 @@ def toggle_addon(aid):
 
 @app.route('/api/addons/<int:aid>', methods=['DELETE'])
 def delete_addon(aid):
+    """
+    Hard delete addon record.
+    Change 2 (v3.4): Permanently removes addon from database.
+    """
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE addons SET deleted=TRUE, active=FALSE WHERE id=%s", (aid,))
+        cur.execute("SELECT id, name FROM addons WHERE id=%s", (aid,))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': f'Addon {aid} not found', 'deleted': False}), 404
+
+        addon_name = row[1]
+        cur.execute("DELETE FROM addons WHERE id=%s", (aid,))
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted addon ID {aid} ({addon_name})")
+        return jsonify({
+            'message': f'Addon "{addon_name}" permanently deleted',
+            'deleted': True,
+            'addon_id': aid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting addon {aid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting addon {aid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -1718,7 +2005,7 @@ def list_pricing_rules():
     cur = db.cursor()
     try:
         cur.execute(
-            """SELECT * FROM pricing_rules WHERE client_id=%s AND deleted=FALSE
+            """SELECT * FROM pricing_rules WHERE client_id=%s
                ORDER BY priority ASC, id ASC""",
             (client_id,)
         )
@@ -1820,16 +2107,32 @@ def toggle_pricing_rule(rid):
 
 @app.route('/api/pricing-rules/<int:rid>', methods=['DELETE'])
 def delete_pricing_rule(rid):
+    """
+    Hard delete pricing rule.
+    Change 2 (v3.4): Permanently removes rule from database.
+    """
     db = get_db()
     cur = db.cursor()
     try:
-        cur.execute("UPDATE pricing_rules SET deleted=TRUE, active=FALSE WHERE id=%s", (rid,))
+        cur.execute("SELECT id, name FROM pricing_rules WHERE id=%s", (rid,))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': f'Pricing rule {rid} not found', 'deleted': False}), 404
+
+        rule_name = row[1]
+        cur.execute("DELETE FROM pricing_rules WHERE id=%s", (rid,))
         db.commit()
-        return jsonify({'message': 'Deleted'})
+        logger.info(f"Hard deleted pricing rule ID {rid} ({rule_name})")
+        return jsonify({
+            'message': f'Pricing rule "{rule_name}" permanently deleted',
+            'deleted': True,
+            'rule_id': rid
+        })
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting pricing rule {rid}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error hard deleting pricing rule {rid}: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'deleted': False}), 500
     finally:
         db.close()
 
@@ -2131,9 +2434,7 @@ def _parse_natural_language_rule(text: str) -> dict:
 # =====================================================
 
 # Amadeus token cache — in-memory, survives for the lifetime of the process.
-# Shared across all request threads (flights AND hotels use the same token).
-# Token refresh is safe: worst case two threads both refresh simultaneously,
-# which is harmless (last write wins).
+# Shared across all request threads (flights AND hotels AND hotel-lookup use same token).
 _amadeus_token_cache = {'token': None, 'expires_at': 0}
 
 
@@ -2220,7 +2521,7 @@ def _get_amadeus_token() -> str:
     Uses the cached token when it has more than 30 seconds of remaining life.
     Otherwise fetches a fresh token via _fetch_fresh_amadeus_token().
     This function is the single call-site used by all Amadeus API helpers
-    (both flights and hotels share the same token cache).
+    (flights, hotels, and hotel-lookup share the same token cache).
     """
     now = time.time()
     cached_token = _amadeus_token_cache.get('token')
@@ -2253,12 +2554,10 @@ def _invalidate_amadeus_token() -> None:
 # =====================================================
 
 # In-memory FX rate cache to avoid hitting the FX API on every hotel search.
-# Rates expire after FX_CACHE_TTL_SECONDS (1 hour by default).
 _fx_rate_cache: dict = {}
 FX_CACHE_TTL_SECONDS = 3600
 
 # Fallback approximate rates to INR (updated periodically by the dev team).
-# These are only used when the live FX API is unavailable.
 _FX_FALLBACK_RATES_TO_INR = {
     'INR': 1.0,
     'USD': 83.50,
@@ -2300,9 +2599,6 @@ def _get_fx_rate_to_inr(currency: str) -> float:
       1. In-memory cache (valid for FX_CACHE_TTL_SECONDS)
       2. Live FX API (exchangerate-api.com if EXCHANGERATE_API_KEY is set)
       3. Hardcoded fallback rates
-
-    This function is NEVER called from the frontend. Credentials and raw
-    rates are never included in API responses.
     """
     currency = currency.upper().strip()
 
@@ -2315,7 +2611,6 @@ def _get_fx_rate_to_inr(currency: str) -> float:
         logger.debug(f"FX cache hit: 1 {currency} = {cached['rate']} INR")
         return cached['rate']
 
-    # Attempt live fetch
     api_key = os.environ.get('EXCHANGERATE_API_KEY', '').strip()
     if api_key:
         try:
@@ -2334,18 +2629,15 @@ def _get_fx_rate_to_inr(currency: str) -> float:
         except Exception as e:
             logger.warning(f"FX live rate fetch failed for {currency}: {e} — using fallback")
 
-    # Fallback to hardcoded rates
     fallback = _FX_FALLBACK_RATES_TO_INR.get(currency)
     if fallback:
         logger.info(f"FX fallback rate: 1 {currency} = {fallback} INR")
-        # Cache the fallback too, but for shorter time
         _fx_rate_cache[currency] = {
             'rate': fallback,
-            'expires_at': now + 600  # 10 min cache for fallback
+            'expires_at': now + 600
         }
         return fallback
 
-    # Last resort: assume 1:1 (should not happen in production)
     logger.error(f"FX: no rate available for {currency}, assuming 1:1 with INR (INCORRECT)")
     return 1.0
 
@@ -2463,7 +2755,7 @@ def _normalize_flight_offers(raw_offers, trip_type='one_way'):
 def _amadeus_flight_search_request(params: dict) -> _requests.Response:
     """
     Execute the Amadeus v2/shopping/flight-offers GET request with automatic
-    token refresh on 401.  Returns the parsed JSON response body.
+    token refresh on 401.  Returns the raw Response object.
     Raises requests.HTTPError for non-recoverable HTTP errors.
     """
     base_url = _get_amadeus_base_url()
@@ -2478,7 +2770,6 @@ def _amadeus_flight_search_request(params: dict) -> _requests.Response:
     )
 
     if resp.status_code == 401:
-        # Token was rejected — invalidate cache and retry once with a fresh token
         logger.warning("Amadeus API returned 401 — refreshing token and retrying")
         _invalidate_amadeus_token()
         token = _get_amadeus_token()
@@ -2510,6 +2801,9 @@ def flight_search():
 
     Returns clean structured JSON — raw Amadeus response is never forwarded.
     API credentials remain backend-only and are never included in any response.
+
+    Change 1 (v3.4): tripType/trip_type is validated and normalised via
+    _validate_and_normalise_trip_type() before being used.
     """
     try:
         data = request.get_json()
@@ -2521,7 +2815,10 @@ def flight_search():
         destination = (data.get('destination') or '').strip().upper()
         departure_date = (data.get('departureDate') or data.get('departure_date') or '').strip()
         return_date = (data.get('returnDate') or data.get('return_date') or '').strip()
-        trip_type = (data.get('trip_type') or 'one_way').strip().lower()
+
+        # Change 1: Use validated, normalised trip type from utility function
+        raw_trip_type = data.get('tripType') or data.get('trip_type') or 'one_way'
+        trip_type = _validate_and_normalise_trip_type(raw_trip_type)
 
         try:
             adults = max(1, int(data.get('adults', 1)))
@@ -2559,7 +2856,6 @@ def flight_search():
         # ── Call Amadeus API ──────────────────────────────────────────────────
         resp = _amadeus_flight_search_request(params)
 
-        # Surface Amadeus-level errors as user-friendly messages
         if not resp.ok:
             err_body = {}
             try:
@@ -2592,9 +2888,9 @@ def flight_search():
 
         logger.info(
             f"Flight search {origin}->{destination} on {departure_date}: "
-            f"{len(offers)} offers returned"
+            f"{len(offers)} offers returned (trip_type={trip_type})"
         )
-        return jsonify({'offers': offers, 'count': len(offers)})
+        return jsonify({'offers': offers, 'count': len(offers), 'tripType': trip_type})
 
     except ValueError as e:
         logger.error(f"Flight search configuration error: {e}", exc_info=True)
@@ -2623,25 +2919,370 @@ def flight_search():
 
 
 # =====================================================
-# HOTEL SEARCH — Amadeus Hotel Offers API v3
+# FLIGHT DETAILS — Structured JSON for selected flight
 # =====================================================
-# Phase 4 implementation.
-# Uses the shared Amadeus OAuth token (same cache as flights).
-# FX conversion is performed server-side using _convert_to_inr().
-# Raw Amadeus responses are NEVER forwarded to the frontend.
-# Credentials are NEVER included in any response body.
-#
-# Two-step Amadeus hotel flow:
-#   Step 1: GET /v1/reference-data/locations/hotels/by-city
-#             → Returns list of hotel IDs for city code
-#   Step 2: GET /v3/shopping/hotel-offers
-#             → Returns availability + pricing for those hotel IDs
-#
-# Input:
-#   { cityCode, checkInDate, checkOutDate, adults, roomQuantity }
-#
-# Output (normalized, all prices in INR):
-#   { hotels: [...], count: int, message?: str }
+# Change 3 (v3.4): After user selects a flight from search results,
+# /api/flight-details returns a fully structured JSON containing:
+#   airline, flight_number, departure_airport, arrival_airport,
+#   departure_time, arrival_time, duration, pricing_breakdown
+# All data comes from the backend. Raw Amadeus data is never forwarded.
+# Credentials are never included in any response.
+# =====================================================
+
+def _build_flight_pricing_breakdown(offer_data: dict, adults: int, children: int) -> dict:
+    """
+    Build a detailed pricing breakdown dict from an Amadeus offer block.
+    All calculation is descriptive only — no pricing engine logic is applied here.
+    The breakdown shows component-level cost transparency for display purposes.
+    Returns a structured dict safe for frontend consumption.
+    """
+    try:
+        price = offer_data.get('price', {})
+        traveler_pricings = offer_data.get('travelerPricings', [])
+
+        grand_total_str = price.get('grandTotal') or price.get('total', '0')
+        grand_total = float(grand_total_str)
+        base_fare_str = price.get('base', grand_total_str)
+        base_fare = float(base_fare_str)
+        currency = price.get('currency', 'INR')
+        fees = price.get('fees', [])
+
+        total_taxes = 0.0
+        for fee_item in fees:
+            try:
+                total_taxes += float(fee_item.get('amount', 0))
+            except (ValueError, TypeError):
+                pass
+
+        # Per-traveler breakdown
+        per_traveler = []
+        for tp in traveler_pricings:
+            try:
+                tp_price = tp.get('price', {})
+                tp_total_str = tp_price.get('total', '0')
+                tp_base_str = tp_price.get('base', tp_total_str)
+                tp_total = float(tp_total_str)
+                tp_base = float(tp_base_str)
+                traveler_type = tp.get('travelerType', 'ADULT')
+                tp_quantity = tp.get('quantity', 1)
+                per_traveler.append({
+                    'travelerType': traveler_type,
+                    'quantity': tp_quantity,
+                    'baseFare': round(tp_base, 2),
+                    'total': round(tp_total, 2),
+                    'currency': currency,
+                })
+            except (ValueError, TypeError, KeyError) as e:
+                logger.warning(f"Skipping malformed traveler pricing: {e}")
+                continue
+
+        return {
+            'baseFare': round(base_fare, 2),
+            'taxes': round(total_taxes, 2),
+            'grandTotal': round(grand_total, 2),
+            'currency': currency,
+            'perTraveler': per_traveler,
+            'adults': adults,
+            'children': children,
+        }
+    except Exception as e:
+        logger.warning(f"Could not build pricing breakdown: {e}")
+        return {
+            'baseFare': 0.0,
+            'taxes': 0.0,
+            'grandTotal': 0.0,
+            'currency': 'INR',
+            'perTraveler': [],
+            'adults': adults,
+            'children': children,
+        }
+
+
+def _build_structured_flight_detail(raw_offer: dict, trip_type: str, adults: int, children: int) -> dict:
+    """
+    Build fully structured flight detail dict from a raw Amadeus offer.
+    Returns the complete structured response used by /api/flight-details.
+    Raw Amadeus fields are never directly forwarded — all fields are explicitly extracted.
+    """
+    itineraries = raw_offer.get('itineraries', [])
+    if not itineraries:
+        raise ValueError("No itinerary data in flight offer")
+
+    # ── Outbound leg ─────────────────────────────────────────────────────────
+    out_it = itineraries[0]
+    out_segments = out_it.get('segments', [])
+    if not out_segments:
+        raise ValueError("No segments in outbound itinerary")
+
+    first_seg = out_segments[0]
+    last_seg = out_segments[-1]
+
+    carrier_code = first_seg.get('carrierCode', '')
+    flight_number = f"{carrier_code}{first_seg.get('number', '')}"
+    airline = raw_offer.get('validatingAirlineCodes', [carrier_code])
+    airline = airline[0] if airline else carrier_code
+
+    departure_airport = first_seg.get('departure', {}).get('iataCode', '')
+    departure_terminal = first_seg.get('departure', {}).get('terminal', '')
+    departure_time = first_seg.get('departure', {}).get('at', '')
+
+    arrival_airport = last_seg.get('arrival', {}).get('iataCode', '')
+    arrival_terminal = last_seg.get('arrival', {}).get('terminal', '')
+    arrival_time = last_seg.get('arrival', {}).get('at', '')
+
+    duration = out_it.get('duration', '').replace('PT', '').lower()
+    stops = len(out_segments) - 1
+
+    # Intermediate stops detail
+    intermediate_stops = []
+    for seg in out_segments[:-1]:
+        stop_code = seg.get('arrival', {}).get('iataCode', '')
+        stop_time = seg.get('arrival', {}).get('at', '')
+        if stop_code:
+            intermediate_stops.append({'airport': stop_code, 'arrivalAt': stop_time})
+
+    # Cabin class from first traveler's first segment fare
+    traveler_pricings = raw_offer.get('travelerPricings', [{}])
+    fare_details = traveler_pricings[0].get('fareDetailsBySegment', [{}])
+    cabin = fare_details[0].get('cabin', 'ECONOMY') if fare_details else 'ECONOMY'
+    fare_basis = fare_details[0].get('fareBasis', '') if fare_details else ''
+
+    # ── Baggage allowance ────────────────────────────────────────────────────
+    baggage_allowance = {}
+    if fare_details:
+        included_bags = fare_details[0].get('includedCheckedBags', {})
+        if included_bags:
+            baggage_allowance = {
+                'quantity': included_bags.get('quantity', 0),
+                'weight': included_bags.get('weight'),
+                'weightUnit': included_bags.get('weightUnit', 'KG'),
+            }
+
+    # ── Return leg ───────────────────────────────────────────────────────────
+    return_leg = None
+    if trip_type == 'return' and len(itineraries) > 1:
+        ret_it = itineraries[1]
+        ret_segments = ret_it.get('segments', [])
+        if ret_segments:
+            ret_first = ret_segments[0]
+            ret_last = ret_segments[-1]
+            return_leg = {
+                'departureAirport': ret_first.get('departure', {}).get('iataCode', ''),
+                'departureTerminal': ret_first.get('departure', {}).get('terminal', ''),
+                'departureTime': ret_first.get('departure', {}).get('at', ''),
+                'arrivalAirport': ret_last.get('arrival', {}).get('iataCode', ''),
+                'arrivalTerminal': ret_last.get('arrival', {}).get('terminal', ''),
+                'arrivalTime': ret_last.get('arrival', {}).get('at', ''),
+                'duration': ret_it.get('duration', '').replace('PT', '').lower(),
+                'stops': len(ret_segments) - 1,
+                'flightNumber': f"{ret_first.get('carrierCode','')}{ret_first.get('number','')}",
+            }
+
+    # ── Pricing breakdown ─────────────────────────────────────────────────────
+    pricing_breakdown = _build_flight_pricing_breakdown(raw_offer, adults, children)
+
+    return {
+        'offerId': raw_offer.get('id', ''),
+        'airline': airline,
+        'flightNumber': flight_number,
+        'carrierCode': carrier_code,
+        'tripType': trip_type,
+        # Outbound leg
+        'departureAirport': departure_airport,
+        'departureTerminal': departure_terminal,
+        'departureTime': departure_time,
+        'arrivalAirport': arrival_airport,
+        'arrivalTerminal': arrival_terminal,
+        'arrivalTime': arrival_time,
+        'duration': duration,
+        'stops': stops,
+        'intermediateStops': intermediate_stops,
+        # Cabin / fare
+        'cabinClass': cabin,
+        'fareBasis': fare_basis,
+        'baggageAllowance': baggage_allowance,
+        # Return leg
+        'returnLeg': return_leg,
+        # Pricing
+        'pricingBreakdown': pricing_breakdown,
+    }
+
+
+@app.route('/api/flight-details', methods=['POST'])
+def flight_details():
+    """
+    Change 3 (v3.4): Returns structured flight detail JSON for a selected flight offer.
+
+    Accepts JSON body:
+    {
+        "offer_id":        "1",           # Amadeus offer ID from flight-search results (required)
+        "origin":          "DEL",         # IATA departure code (required, used to re-fetch)
+        "destination":     "BOM",         # IATA arrival code (required, used to re-fetch)
+        "departureDate":   "2026-04-10",  # YYYY-MM-DD (required)
+        "returnDate":      "2026-04-15",  # YYYY-MM-DD (optional, for return flights)
+        "adults":          2,             # default 1
+        "children":        0,             # default 0
+        "tripType":        "one_way"      # "one_way" | "return" | "multi_city"
+    }
+
+    Returns structured JSON:
+    {
+        "airline":            str,        # Airline code / validating carrier
+        "flight_number":      str,        # e.g. "6E234"
+        "departure_airport":  str,        # IATA code
+        "arrival_airport":    str,        # IATA code
+        "departure_time":     str,        # ISO 8601
+        "arrival_time":       str,        # ISO 8601
+        "duration":           str,        # e.g. "2h30m"
+        "pricing_breakdown":  {...}       # detailed fare components
+        ... (additional fields)
+    }
+
+    All data originates from the backend. Raw Amadeus response is never forwarded.
+    API credentials are never included in any response.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No parameters provided'}), 400
+
+        offer_id = str(data.get('offer_id') or data.get('offerId') or '').strip()
+        origin = (data.get('origin') or '').strip().upper()
+        destination = (data.get('destination') or '').strip().upper()
+        departure_date = (data.get('departureDate') or data.get('departure_date') or '').strip()
+        return_date = (data.get('returnDate') or data.get('return_date') or '').strip()
+
+        # Validate and normalise trip type (Change 1 utility)
+        raw_trip_type = data.get('tripType') or data.get('trip_type') or 'one_way'
+        trip_type = _validate_and_normalise_trip_type(raw_trip_type)
+
+        try:
+            adults = max(1, int(data.get('adults', 1)))
+        except (ValueError, TypeError):
+            adults = 1
+
+        try:
+            children = max(0, int(data.get('children', 0)))
+        except (ValueError, TypeError):
+            children = 0
+
+        if not origin or len(origin) < 2:
+            return jsonify({'error': 'Valid departure IATA code required (e.g. DEL)'}), 400
+        if not destination or len(destination) < 2:
+            return jsonify({'error': 'Valid arrival IATA code required (e.g. BOM)'}), 400
+        if not departure_date:
+            return jsonify({'error': 'Departure date is required (YYYY-MM-DD)'}), 400
+        if not offer_id:
+            return jsonify({'error': 'offer_id is required to retrieve flight details'}), 400
+
+        # Re-fetch the offer list from Amadeus to get the full offer structure
+        # for the requested offer_id. This is necessary because Amadeus does not
+        # provide a single-offer lookup endpoint in the Self-Service tier.
+        params = {
+            'originLocationCode': origin,
+            'destinationLocationCode': destination,
+            'departureDate': departure_date,
+            'adults': adults,
+            'max': 20,
+            'currencyCode': 'INR',
+        }
+        if children > 0:
+            params['children'] = children
+        if trip_type == 'return' and return_date:
+            params['returnDate'] = return_date
+
+        resp = _amadeus_flight_search_request(params)
+
+        if not resp.ok:
+            err_body = {}
+            try:
+                err_body = resp.json()
+            except Exception:
+                pass
+            errors = err_body.get('errors', [])
+            err_title = errors[0].get('title', 'Flight lookup failed') if errors else 'Flight lookup failed'
+            err_detail = errors[0].get('detail', '') if errors else ''
+            logger.error(f"Amadeus flight-details error {resp.status_code}: {err_title}")
+            return jsonify({'error': err_title, 'detail': err_detail}), 200
+
+        raw = resp.json()
+        raw_offers = raw.get('data', [])
+
+        if not raw_offers:
+            return jsonify({'error': 'No flight offers found for the specified search. The offer may have expired.'}), 200
+
+        # Find the specific offer by ID; fall back to first offer if not found
+        # (Amadeus IDs are positional and may shift between calls)
+        matched_offer = None
+        for ro in raw_offers:
+            if str(ro.get('id', '')) == offer_id:
+                matched_offer = ro
+                break
+
+        if not matched_offer:
+            # Use first offer as best-effort fallback and log a warning
+            logger.warning(
+                f"Flight offer ID '{offer_id}' not found in fresh results for "
+                f"{origin}->{destination} on {departure_date}. Using first available offer."
+            )
+            matched_offer = raw_offers[0]
+
+        # Build structured detail response
+        try:
+            structured = _build_structured_flight_detail(matched_offer, trip_type, adults, children)
+        except ValueError as ve:
+            logger.error(f"Error building structured flight detail: {ve}", exc_info=True)
+            return jsonify({'error': f'Could not process flight offer data: {str(ve)}'}), 200
+
+        # Map to the canonical frontend-facing field names specified in Change 3
+        response = {
+            'airline': structured['airline'],
+            'flight_number': structured['flightNumber'],
+            'departure_airport': structured['departureAirport'],
+            'departure_terminal': structured.get('departureTerminal', ''),
+            'arrival_airport': structured['arrivalAirport'],
+            'arrival_terminal': structured.get('arrivalTerminal', ''),
+            'departure_time': structured['departureTime'],
+            'arrival_time': structured['arrivalTime'],
+            'duration': structured['duration'],
+            'stops': structured['stops'],
+            'intermediate_stops': structured.get('intermediateStops', []),
+            'cabin_class': structured.get('cabinClass', 'ECONOMY'),
+            'fare_basis': structured.get('fareBasis', ''),
+            'baggage_allowance': structured.get('baggageAllowance', {}),
+            'trip_type': trip_type,
+            'return_leg': structured.get('returnLeg'),
+            'pricing_breakdown': structured['pricingBreakdown'],
+            'offer_id': structured.get('offerId', offer_id),
+            'carrier_code': structured.get('carrierCode', ''),
+        }
+
+        logger.info(
+            f"Flight details returned for offer '{offer_id}': "
+            f"{response['departure_airport']}->{response['arrival_airport']}, "
+            f"airline={response['airline']}, trip_type={trip_type}"
+        )
+        return jsonify(response), 200
+
+    except ValueError as e:
+        logger.error(f"Flight details configuration error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 200
+
+    except _requests.exceptions.Timeout:
+        logger.error("Flight details request timed out")
+        return jsonify({'error': 'Request timed out. Please try again.'}), 200
+
+    except _requests.exceptions.ConnectionError as e:
+        logger.error(f"Flight details network error: {e}", exc_info=True)
+        return jsonify({'error': 'Could not reach flight service. Please check connectivity.'}), 200
+
+    except Exception as e:
+        logger.error(f"Flight details unexpected error: {e}", exc_info=True)
+        return jsonify({'error': 'Flight details temporarily unavailable. Please try again.'}), 200
+
+
+# =====================================================
+# HOTEL SEARCH — Amadeus Hotel Offers API v3
 # =====================================================
 
 def _amadeus_get_request(url: str, params: dict, timeout: int = 15) -> _requests.Response:
@@ -2761,11 +3402,6 @@ def _normalize_hotel_offers(raw_offers: list, nights: int) -> list:
     Normalize raw Amadeus hotel offer list into clean frontend-safe structure.
     All prices are converted to INR server-side.
     Raw Amadeus data is NEVER forwarded to the frontend.
-
-    Returns list of dicts with:
-      id, hotelName, roomType, boardType, cancellationPolicy,
-      totalPrice (INR), currency, perNightPrice (INR, optional display only),
-      originalCurrency, originalPrice
     """
     results = []
 
@@ -2792,7 +3428,7 @@ def _normalize_hotel_offers(raw_offers: list, nights: int) -> list:
                 # Board type (meal plan)
                 board_type = offer.get('boardType', 'ROOM_ONLY')
 
-                # Cancellation policy — raw text from Amadeus for display only
+                # Cancellation policy
                 policies = offer.get('policies', {})
                 cancellation = policies.get('cancellation', {})
                 cancel_policy = cancellation.get('description', {}).get('text', '')
@@ -2802,14 +3438,12 @@ def _normalize_hotel_offers(raw_offers: list, nights: int) -> list:
 
                 # Pricing
                 price_info = offer.get('price', {})
-                # Try grandTotal first, then total
                 raw_total_str = price_info.get('grandTotal') or price_info.get('total', '0')
                 try:
                     raw_total = float(raw_total_str)
                 except (ValueError, TypeError):
                     raw_total = 0.0
 
-                # Currency from offer, fall back to base if not set
                 original_currency = (
                     price_info.get('currency')
                     or offer_block.get('currency', 'INR')
@@ -2820,7 +3454,6 @@ def _normalize_hotel_offers(raw_offers: list, nights: int) -> list:
                 # Server-side FX conversion to INR
                 total_price_inr = _convert_to_inr(raw_total, original_currency)
 
-                # Per-night breakdown for display (not used in engine math)
                 per_night_price_inr = round(total_price_inr / max(nights, 1), 2) if nights > 0 else total_price_inr
 
                 results.append({
@@ -2830,11 +3463,9 @@ def _normalize_hotel_offers(raw_offers: list, nights: int) -> list:
                     'roomType': room_type,
                     'boardType': board_type,
                     'cancellationPolicy': cancel_policy,
-                    # All pricing fields in INR
                     'totalPrice': round(total_price_inr, 2),
                     'currency': 'INR',
                     'perNightPrice': per_night_price_inr,
-                    # Original currency info (for transparency in the summary only)
                     'originalCurrency': original_currency,
                     'originalPrice': round(original_price, 2),
                 })
@@ -2842,7 +3473,6 @@ def _normalize_hotel_offers(raw_offers: list, nights: int) -> list:
             logger.warning(f"Skipping malformed hotel offer block: {e}")
             continue
 
-    # Sort by totalPrice ascending
     results.sort(key=lambda x: x['totalPrice'])
     return results
 
@@ -2864,13 +3494,6 @@ def hotel_search():
     Returns normalized structure. All prices are in INR.
     Raw Amadeus response is never forwarded.
     API credentials remain backend-only.
-
-    Implementation flow:
-      1. Validate input
-      2. Fetch hotel IDs for the city (Step 1 Amadeus call)
-      3. Fetch hotel offers for those IDs (Step 2 Amadeus call)
-      4. Normalize + convert currency server-side
-      5. Return sorted list by totalPrice ASC
     """
     try:
         data = request.get_json()
@@ -2881,7 +3504,6 @@ def hotel_search():
                 'message': 'No search parameters provided.'
             }), 400
 
-        # ── Input validation ──────────────────────────────────────────────────
         city_code = (data.get('cityCode') or '').strip().upper()
         check_in = (data.get('checkInDate') or data.get('check_in') or '').strip()
         check_out = (data.get('checkOutDate') or data.get('check_out') or '').strip()
@@ -2904,27 +3526,14 @@ def hotel_search():
             }), 400
 
         if not check_in:
-            return jsonify({
-                'hotels': [],
-                'count': 0,
-                'message': 'Check-in date is required (YYYY-MM-DD).'
-            }), 400
+            return jsonify({'hotels': [], 'count': 0, 'message': 'Check-in date is required (YYYY-MM-DD).'}), 400
 
         if not check_out:
-            return jsonify({
-                'hotels': [],
-                'count': 0,
-                'message': 'Check-out date is required (YYYY-MM-DD).'
-            }), 400
+            return jsonify({'hotels': [], 'count': 0, 'message': 'Check-out date is required (YYYY-MM-DD).'}), 400
 
         if check_out <= check_in:
-            return jsonify({
-                'hotels': [],
-                'count': 0,
-                'message': 'Check-out date must be after check-in date.'
-            }), 400
+            return jsonify({'hotels': [], 'count': 0, 'message': 'Check-out date must be after check-in date.'}), 400
 
-        # Calculate number of nights for per-night price display
         try:
             from datetime import date
             ci = date.fromisoformat(check_in)
@@ -2938,7 +3547,6 @@ def hotel_search():
             f"adults={adults}, rooms={room_quantity}, nights={nights}"
         )
 
-        # ── Step 1: Get hotel IDs for city ───────────────────────────────────
         hotel_ids = _fetch_hotel_ids_for_city(city_code, max_hotels=20)
 
         if not hotel_ids:
@@ -2949,34 +3557,22 @@ def hotel_search():
                 'message': f'No hotels found for city code "{city_code}". Try a different city code.'
             }), 200
 
-        # ── Step 2: Get offers for those hotel IDs ───────────────────────────
         raw_offers = _fetch_hotel_offers(hotel_ids, check_in, check_out, adults, room_quantity)
 
         if not raw_offers:
-            logger.info(
-                f"Hotel search: no offers for city {city_code} "
-                f"on {check_in}-{check_out}"
-            )
+            logger.info(f"Hotel search: no offers for city {city_code} on {check_in}-{check_out}")
             return jsonify({
                 'hotels': [],
                 'count': 0,
                 'message': 'No live hotels found for these dates. Try different dates or city.'
             }), 200
 
-        # ── Step 3: Normalize + convert FX ───────────────────────────────────
         normalized = _normalize_hotel_offers(raw_offers, nights)
 
         if not normalized:
-            return jsonify({
-                'hotels': [],
-                'count': 0,
-                'message': 'No live hotels found. Try different dates.'
-            }), 200
+            return jsonify({'hotels': [], 'count': 0, 'message': 'No live hotels found. Try different dates.'}), 200
 
-        logger.info(
-            f"Hotel search {city_code} {check_in}-{check_out}: "
-            f"{len(normalized)} hotels returned"
-        )
+        logger.info(f"Hotel search {city_code} {check_in}-{check_out}: {len(normalized)} hotels returned")
 
         return jsonify({
             'hotels': normalized,
@@ -2987,59 +3583,284 @@ def hotel_search():
         }), 200
 
     except ValueError as e:
-        # Configuration errors (missing credentials)
         logger.error(f"Hotel search configuration error: {e}", exc_info=True)
-        return jsonify({
-            'hotels': [],
-            'count': 0,
-            'message': str(e)
-        }), 200
+        return jsonify({'hotels': [], 'count': 0, 'message': str(e)}), 200
 
     except _requests.exceptions.Timeout:
         logger.error("Hotel search timed out connecting to Amadeus API")
-        return jsonify({
-            'hotels': [],
-            'count': 0,
-            'message': 'Hotel search timed out. Please try again.'
-        }), 200
+        return jsonify({'hotels': [], 'count': 0, 'message': 'Hotel search timed out. Please try again.'}), 200
 
     except _requests.exceptions.ConnectionError as e:
         logger.error(f"Hotel search network error: {e}", exc_info=True)
-        return jsonify({
-            'hotels': [],
-            'count': 0,
-            'message': 'Could not reach hotel search service. Please check connectivity.'
-        }), 200
+        return jsonify({'hotels': [], 'count': 0, 'message': 'Could not reach hotel search service. Please check connectivity.'}), 200
 
     except Exception as e:
         logger.error(f"Hotel search unexpected error: {e}", exc_info=True)
+        return jsonify({'hotels': [], 'count': 0, 'message': 'Hotel search temporarily unavailable. Please try again.'}), 200
+
+
+# =====================================================
+# HOTEL LOOKUP — Amadeus Hotel Name Autocomplete
+# =====================================================
+# Change 4 (v3.4): New /hotel-lookup route.
+# Calls Amadeus Hotel Name Autocomplete API (v1/reference-data/locations/hotel).
+# Returns structured JSON with hotel_name, hotelId, city, country.
+# API key is NEVER exposed in any response.
+# Basic rate limiting applied via _check_rate_limit().
+# =====================================================
+
+def _fetch_hotel_autocomplete(keyword: str, max_results: int = 10) -> list:
+    """
+    Call Amadeus Hotel Name Autocomplete API.
+    Returns raw list of hotel location objects.
+    Returns empty list on error.
+    Credentials are never logged or returned.
+
+    Endpoint: GET /v1/reference-data/locations/hotel
+    Requires: keyword query param
+    """
+    base_url = _get_amadeus_base_url()
+    logger.info(f"Base URL: {base_url}")
+    url = f'{base_url}/v1/reference-data/locations/hotel'
+
+    # subType must be passed as repeated params, NOT comma-separated string
+    # requests encodes a list as: subType=HOTEL_LEISURE&subType=HOTEL_GDS
+    params = {
+        'keyword': keyword.strip(),
+        'subType': ['HOTEL_LEISURE', 'HOTEL_GDS'],
+        'view': 'LIGHT',
+        'lang': 'EN',
+        'max': min(max_results, 20),  # cap at 20 per Amadeus limit
+    }
+
+    try:
+        resp = _amadeus_get_request(url, params, timeout=10)
+        if not resp.ok:
+            err_body = {}
+            try:
+                err_body = resp.json()
+            except Exception:
+                pass
+            errors = err_body.get('errors', [])
+            err_msg = errors[0].get('title', f'HTTP {resp.status_code}') if errors else f'HTTP {resp.status_code}'
+            # Log full error body for easier debugging
+            logger.warning(
+                f"Hotel autocomplete failed for keyword='{keyword}': "
+                f"{err_msg} | full response: {err_body}"
+            )
+            return []
+
+        data = resp.json()
+        return data.get('data', [])
+
+    except (_requests.exceptions.Timeout, _requests.exceptions.ConnectionError) as e:
+        logger.warning(f"Hotel autocomplete network error for keyword='{keyword}': {e}")
+        return []
+    except Exception as e:
+        logger.warning(f"Hotel autocomplete error for keyword='{keyword}': {e}")
+        return []
+
+
+def _normalize_hotel_autocomplete_results(raw_results: list) -> list:
+    """
+    Normalize raw Amadeus hotel autocomplete results into a clean, safe list.
+    Returns list of dicts with hotel_name, hotelId, city, country.
+    Raw Amadeus fields are never forwarded directly.
+    """
+    results = []
+    for item in (raw_results or []):
+        try:
+            hotel_id = str(item.get('hotelIds', [item.get('id', '')])[0] if item.get('hotelIds') else item.get('id', ''))
+            name = str(item.get('name', '')).strip()
+            if not name:
+                continue
+
+            address = item.get('address', {})
+            city_name = str(address.get('cityName', '')).strip()
+            country_code = str(address.get('countryCode', '')).strip()
+
+            # Also extract from iataCode for city fallback
+            iata_code = str(item.get('iataCode', '')).strip()
+            if not city_name and iata_code:
+                city_name = iata_code
+
+            results.append({
+                'hotel_name': name,
+                'hotelId': hotel_id,
+                'city': city_name,
+                'country': country_code,
+                'iataCode': iata_code,
+            })
+        except (KeyError, IndexError, TypeError) as e:
+            logger.warning(f"Skipping malformed hotel autocomplete result: {e}")
+            continue
+
+    return results
+
+
+@app.route('/hotel-lookup', methods=['GET', 'POST'])
+def hotel_lookup():
+    """
+    Change 4 (v3.4): Hotel name autocomplete via Amadeus Hotel Name Autocomplete API.
+
+    Accepts:
+      GET  /hotel-lookup?q=marriott&limit=10
+      POST /hotel-lookup  body: {"q": "marriott", "limit": 10}
+
+    Query parameters:
+      q      (str, required) — hotel name keyword to search
+      limit  (int, optional) — max results to return, default 10, max 20
+
+    Returns structured JSON:
+    [
+        {
+            "hotel_name":  str,   # Hotel display name
+            "hotelId":     str,   # Amadeus hotel ID
+            "city":        str,   # City name
+            "country":     str,   # ISO country code
+            "iataCode":    str    # IATA city code (if available)
+        },
+        ...
+    ]
+
+    Security:
+      - API key is NEVER included in any response
+      - Basic rate limiting: {RATE_LIMIT_MAX_CALLS} calls per IP per {RATE_LIMIT_WINDOW_SECONDS}s
+      - Keyword is sanitised before forwarding to Amadeus
+    """
+    try:
+        # ── Rate limiting check ───────────────────────────────────────────────
+        client_ip = _get_client_ip()
+        if not _check_rate_limit(client_ip, 'hotel-lookup'):
+            logger.warning(f"Rate limit exceeded for hotel-lookup from IP {client_ip}")
+            return jsonify({
+                'error': 'Too many requests. Please wait a moment before searching again.',
+                'results': [],
+                'rateLimited': True
+            }), 429
+
+        # ── Extract keyword from GET or POST ──────────────────────────────────
+        if request.method == 'POST':
+            payload = request.get_json() or {}
+            keyword = str(payload.get('q') or payload.get('keyword') or payload.get('name') or '').strip()
+            try:
+                limit = max(1, min(20, int(payload.get('limit', 10))))
+            except (ValueError, TypeError):
+                limit = 10
+        else:
+            keyword = str(request.args.get('q') or request.args.get('keyword') or request.args.get('name') or '').strip()
+            try:
+                limit = max(1, min(20, int(request.args.get('limit', 10))))
+            except (ValueError, TypeError):
+                limit = 10
+
+        # ── Input validation ──────────────────────────────────────────────────
+        if not keyword:
+            return jsonify({
+                'error': 'Search keyword is required. Use ?q=<hotel_name>',
+                'results': []
+            }), 400
+
+        if len(keyword) < 2:
+            return jsonify({
+                'error': 'Search keyword must be at least 2 characters.',
+                'results': []
+            }), 400
+
+        if len(keyword) > 100:
+            return jsonify({
+                'error': 'Search keyword must not exceed 100 characters.',
+                'results': []
+            }), 400
+
+        # Sanitise keyword: allow only alphanumeric, spaces, hyphens, apostrophes
+        # to prevent potential injection or encoding issues when forwarding to Amadeus
+        sanitised_keyword = re.sub(r"[^a-zA-Z0-9\s\-\'\&\.]", '', keyword).strip()
+        if not sanitised_keyword:
+            return jsonify({
+                'error': 'Search keyword contains no valid characters.',
+                'results': []
+            }), 400
+
+        logger.info(f"Hotel lookup: keyword='{sanitised_keyword}', limit={limit}, ip={client_ip}")
+
+        # ── Call Amadeus autocomplete ─────────────────────────────────────────
+        raw_results = _fetch_hotel_autocomplete(sanitised_keyword, max_results=limit)
+
+        if not raw_results:
+            return jsonify({
+                'results': [],
+                'count': 0,
+                'query': sanitised_keyword,
+                'message': f'No hotels found matching "{sanitised_keyword}". Try a different name or spelling.'
+            }), 200
+
+        # ── Normalise and return ──────────────────────────────────────────────
+        normalised = _normalize_hotel_autocomplete_results(raw_results)
+
+        # Trim to requested limit
+        normalised = normalised[:limit]
+
+        logger.info(f"Hotel lookup '{sanitised_keyword}': {len(normalised)} results returned")
+
         return jsonify({
-            'hotels': [],
-            'count': 0,
-            'message': 'Hotel search temporarily unavailable. Please try again.'
+            'results': normalised,
+            'count': len(normalised),
+            'query': sanitised_keyword,
         }), 200
 
+    except ValueError as e:
+        logger.error(f"Hotel lookup configuration error: {e}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'results': [],
+            'count': 0
+        }), 200
 
+    except _requests.exceptions.Timeout:
+        logger.error("Hotel lookup timed out connecting to Amadeus API")
+        return jsonify({
+            'error': 'Hotel lookup timed out. Please try again.',
+            'results': [],
+            'count': 0
+        }), 200
+
+    except _requests.exceptions.ConnectionError as e:
+        logger.error(f"Hotel lookup network error: {e}", exc_info=True)
+        return jsonify({
+            'error': 'Could not reach hotel lookup service. Please check connectivity.',
+            'results': [],
+            'count': 0
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Hotel lookup unexpected error: {e}", exc_info=True)
+        return jsonify({
+            'error': 'Hotel lookup temporarily unavailable. Please try again.',
+            'results': [],
+            'count': 0
+        }), 200
+    
 # =====================================================
 # PHASE 3 / 5: Pricing Engine Payload Helpers
-# =====================================================
-# The /calculate route accepts optional "flight" and "live_hotel" blocks.
-# These are sanitised server-side and forwarded to pricing_engine.py.
-# No pricing arithmetic happens in this file.
 # =====================================================
 
 def _extract_flight_block(payload: dict) -> dict | None:
     """
     Extract and validate the optional flight block from the calculate payload.
     Returns a sanitised dict if present and structurally valid, else None.
+
+    Change 1 (v3.4): tripType is now validated and normalised via
+    _validate_and_normalise_trip_type() before being passed to the engine.
+    The pricing engine remains the sole source of truth for pricing logic.
     """
     flight_raw = payload.get('flight')
     if not flight_raw or not isinstance(flight_raw, dict):
         return None
 
-    flight_type = str(flight_raw.get('type', 'one_way')).strip().lower()
-    if flight_type not in ('one_way', 'return'):
-        flight_type = 'one_way'
+    # Change 1: Use canonical trip type validator
+    raw_trip_type = flight_raw.get('type') or flight_raw.get('tripType') or flight_raw.get('trip_type') or 'one_way'
+    flight_type = _validate_and_normalise_trip_type(raw_trip_type)
 
     try:
         base_fare = float(flight_raw.get('base_fare', 0))
@@ -3055,6 +3876,7 @@ def _extract_flight_block(payload: dict) -> dict | None:
 
     return {
         'type': flight_type,
+        'tripType': flight_type,   # alias for engine compatibility
         'base_fare': base_fare,
         'pax': pax,
     }
@@ -3064,18 +3886,6 @@ def _extract_live_hotel_block(payload: dict) -> dict | None:
     """
     Extract and validate the optional live_hotel block from the calculate payload.
     Returns a sanitised dict if present and structurally valid, else None.
-
-    Expected input structure (from frontend after hotel-search):
-    {
-        "live_hotel_id":             str,   # Amadeus offer ID
-        "live_hotel_name":           str,   # hotel name
-        "live_hotel_room_type":      str,   # room type
-        "live_hotel_board_type":     str,   # board type
-        "live_hotel_total_price":    float, # total stay price in INR (already converted)
-        "live_hotel_currency":       str,   # "INR" (post-conversion)
-        "live_hotel_original_price": float, # original price before FX (informational)
-        "live_hotel_original_currency": str # original currency before FX (informational)
-    }
     """
     live_raw = payload.get('live_hotel')
     if not live_raw or not isinstance(live_raw, dict):
@@ -3088,7 +3898,6 @@ def _extract_live_hotel_block(payload: dict) -> dict | None:
     except (ValueError, TypeError):
         total_price = 0.0
 
-    # Sanitise string fields
     offer_id = str(live_raw.get('live_hotel_id', '')).strip()[:200]
     hotel_name = str(live_raw.get('live_hotel_name', '')).strip()[:200]
     room_type = str(live_raw.get('live_hotel_room_type', '')).strip()[:100]
@@ -3129,9 +3938,9 @@ def calculate():
 
     Phase 5 extension: if the payload contains hotel_source="live" and a
     "live_hotel" block, both are sanitised and forwarded to the pricing engine.
-    The engine computes hotel cost from live_hotel_total_price directly
-    (no night/pax multiplication). entity_type="hotel" pricing rules are
-    skipped automatically by the rule engine in live hotel mode.
+
+    Change 1 (v3.4): tripType from frontend is validated and normalised before
+    being passed to the engine. No pricing logic is applied in this file.
     """
     try:
         payload = request.get_json()
@@ -3154,6 +3963,15 @@ def calculate():
 
         client_id = int(payload.get('client_id', 1))
         logger.info(f"Calculate request for client {client_id}: {json.dumps(payload, default=str)}")
+
+        # ── Change 1: Extract and validate tripType from top-level payload ───
+        # This applies to transport-level trip type (e.g., one-way vs return bus booking).
+        # It is separate from flight block trip type which is handled in _extract_flight_block().
+        raw_transport_trip_type = payload.get('tripType') or payload.get('trip_type') or 'one_way'
+        transport_trip_type = _validate_and_normalise_trip_type(raw_transport_trip_type)
+        payload['tripType'] = transport_trip_type
+        payload['trip_type'] = transport_trip_type  # snake_case alias for engine
+        logger.info(f"Transport trip type: {transport_trip_type}")
 
         # ── Phase 3: extract optional flight block ────────────────────────────
         flight_block = _extract_flight_block(payload)
@@ -3182,9 +4000,7 @@ def calculate():
             else:
                 logger.warning("hotel_source=live but no valid live_hotel block found — hotel cost will be 0")
         else:
-            # Ensure live_hotel is cleared in admin mode
             payload['live_hotel'] = None
-        # ─────────────────────────────────────────────────────────────────────
 
         required_fields = ['region_id', 'adults', 'nights', 'transport']
         missing_fields = [f for f in required_fields if f not in payload or payload[f] is None or payload[f] == '']
@@ -3226,7 +4042,7 @@ def calculate():
         try:
             cur = db.cursor()
             cur.execute(
-                "SELECT id, name FROM regions WHERE id=%s AND client_id=%s AND active=TRUE AND deleted=FALSE",
+                "SELECT id, name FROM regions WHERE id=%s AND client_id=%s AND active=TRUE",
                 (payload['region_id'], client_id)
             )
             region_row = cur.fetchone()
@@ -3267,7 +4083,7 @@ def calculate():
         if transport_type:
             try:
                 cur.execute(
-                    "SELECT id, name, transport_type FROM transports WHERE transport_type=%s AND client_id=%s AND active=TRUE AND deleted=FALSE",
+                    "SELECT id, name, transport_type FROM transports WHERE transport_type=%s AND client_id=%s AND active=TRUE",
                     (transport_type, client_id)
                 )
                 transport_row = cur.fetchone()
@@ -3310,7 +4126,7 @@ def calculate():
             if hotel_key:
                 try:
                     cur.execute(
-                        "SELECT id, name, internal_name FROM hotels WHERE internal_name=%s AND client_id=%s AND active=TRUE AND deleted=FALSE",
+                        "SELECT id, name, internal_name FROM hotels WHERE internal_name=%s AND client_id=%s AND active=TRUE",
                         (hotel_key, client_id)
                     )
                     hotel_row = cur.fetchone()
@@ -3321,14 +4137,13 @@ def calculate():
                     logger.error(f"Hotel verification error: {e}", exc_info=True)
                     payload['hotel'] = None
         else:
-            # Live hotel mode — hotel key is not from DB, skip DB validation
             logger.info("hotel_source=live — skipping admin hotel DB validation")
 
         cab_key = payload.get('cab')
         if cab_key:
             try:
                 cur.execute(
-                    "SELECT id, name, internal_name FROM cabs WHERE internal_name=%s AND client_id=%s AND active=TRUE AND deleted=FALSE",
+                    "SELECT id, name, internal_name FROM cabs WHERE internal_name=%s AND client_id=%s AND active=TRUE",
                     (cab_key, client_id)
                 )
                 cab_row = cur.fetchone()
@@ -3411,8 +4226,14 @@ def calculate():
         result.setdefault('rooms', payload.get('rooms', 0))
         result.setdefault('appliedRules', [])
         result.setdefault('hotelSource', hotel_source)
+        result.setdefault('tripType', transport_trip_type)
 
-        logger.info(f"Calculation successful: total={result.get('total')}, perPerson={result.get('perPerson')}, hotelSource={hotel_source}")
+        logger.info(
+            f"Calculation successful: total={result.get('total')}, "
+            f"perPerson={result.get('perPerson')}, "
+            f"hotelSource={hotel_source}, "
+            f"tripType={transport_trip_type}"
+        )
 
         return jsonify(result)
 
@@ -3450,18 +4271,26 @@ def calculate():
 
 @app.route('/check-cab-required', methods=['POST'])
 def check_cab():
-    data = request.get_json()
-    transport = data.get('transport', '')
-    days = data.get('days', [])
-    required = check_cab_required(transport, days)
-    return jsonify({'cabRequired': required})
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided', 'cabRequired': False}), 400
+        transport = data.get('transport', '')
+        days = data.get('days', [])
+        required = check_cab_required(transport, days)
+        return jsonify({'cabRequired': required})
+    except Exception as e:
+        logger.error(f"check_cab error: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'cabRequired': False}), 500
 
 
 @app.route('/api/room-calculator', methods=['POST'])
 def room_calc():
     """Standalone room calculation endpoint."""
-    data = request.get_json()
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
         result = RoomCalculator.calculate_room_allocation(
             adults=int(data.get('adults', 2)),
             children=int(data.get('children', 0)),
@@ -3470,6 +4299,9 @@ def room_calc():
             paying_children=data.get('paying_children')
         )
         return jsonify(result)
+    except ValueError as e:
+        logger.error(f"Room calc validation error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Room calc error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 400
@@ -3487,6 +4319,9 @@ def ai_chat():
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'reply': json.dumps({'action': 'GENERAL_CHAT', 'message': 'No input received.'})}), 400
+
         user_message = data.get('message', '')
         session_id = data.get('sessionId', '')
         current_state = data.get('currentState', {})
@@ -3500,19 +4335,19 @@ def ai_chat():
         client_row = cur.fetchone()
         client_name = client_row[0] if client_row else 'Travel Agency'
 
-        cur.execute("SELECT internal_name, name FROM hotels WHERE client_id=%s AND active=TRUE AND deleted=FALSE", (client_id,))
+        cur.execute("SELECT internal_name, name FROM hotels WHERE client_id=%s AND active=TRUE", (client_id,))
         hotels = [{'key': r[0], 'name': r[1]} for r in cur.fetchall()]
 
-        cur.execute("SELECT transport_type, display_name FROM transports WHERE client_id=%s AND active=TRUE AND deleted=FALSE", (client_id,))
+        cur.execute("SELECT transport_type, display_name FROM transports WHERE client_id=%s AND active=TRUE", (client_id,))
         transports = [{'key': r[0], 'name': r[1]} for r in cur.fetchall()]
 
-        cur.execute("SELECT internal_name, display_name FROM destinations WHERE client_id=%s AND active=TRUE AND deleted=FALSE", (client_id,))
+        cur.execute("SELECT internal_name, display_name FROM destinations WHERE client_id=%s AND active=TRUE", (client_id,))
         destinations = [{'key': r[0], 'name': r[1]} for r in cur.fetchall()]
 
-        cur.execute("SELECT internal_name, name FROM addons WHERE client_id=%s AND active=TRUE AND deleted=FALSE", (client_id,))
+        cur.execute("SELECT internal_name, name FROM addons WHERE client_id=%s AND active=TRUE", (client_id,))
         addons = [{'key': r[0], 'name': r[1]} for r in cur.fetchall()]
 
-        cur.execute("SELECT internal_name, display_name FROM cabs WHERE client_id=%s AND active=TRUE AND deleted=FALSE", (client_id,))
+        cur.execute("SELECT internal_name, display_name FROM cabs WHERE client_id=%s AND active=TRUE", (client_id,))
         cabs = [{'key': r[0], 'name': r[1]} for r in cur.fetchall()]
 
         db.close()

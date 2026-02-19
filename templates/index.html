@@ -288,16 +288,31 @@ header::after{
 .price-label{font-size:0.7em;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.5);margin-bottom:2px}
 
 /* =====================================================
-   BACK BUTTON
+   BACK + HOME BUTTONS
    ===================================================== */
+#navBtnGroup{
+  position:fixed;top:1rem;left:1rem;display:none;z-index:1000;
+  display:flex;gap:0.5rem;align-items:center;
+}
 #backBtn{
-  position:fixed;top:1rem;left:1rem;display:none;padding:0.625rem 1rem;
+  padding:0.625rem 0.875rem;
   border-radius:10px;border:none;background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);
-  color:#fff;cursor:pointer;z-index:1000;transition:var(--transition-smooth);
-  font-weight:600;font-size:0.875rem;min-height:var(--touch-min);
-  -webkit-tap-highlight-color:transparent;
+  color:#fff;cursor:pointer;transition:var(--transition-smooth);
+  font-weight:600;font-size:1rem;min-height:var(--touch-min);
+  -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;
+  line-height:1;
 }
 #backBtn:hover{background:rgba(0,0,0,0.7);transform:translateX(-3px)}
+#homeBtn{
+  padding:0.625rem 0.875rem;
+  border-radius:10px;border:none;background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);
+  color:#fff;cursor:pointer;transition:var(--transition-smooth);
+  font-weight:600;font-size:1.1rem;min-height:var(--touch-min);
+  -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;
+}
+#homeBtn:hover{background:rgba(102,126,234,0.4);transform:scale(1.05)}
+#navBtnGroup.visible{display:flex}
+#navBtnGroup.hidden{display:none}
 
 /* =====================================================
    AI INPUT
@@ -351,6 +366,25 @@ header::after{
 .hotelSourceBtn:hover{background:rgba(102,126,234,0.25);transform:translateY(-2px);box-shadow:0 4px 15px rgba(102,126,234,0.3)}
 .hotelSourceBtn.active{background:var(--primary-gradient);border-color:rgba(255,255,255,0.4);box-shadow:0 0 20px rgba(102,126,234,0.5)}
 .hotelSourceBtn .btn-icon{font-size:1rem}
+
+/* =====================================================
+   TRIP TYPE (ONE WAY / RETURN)
+   ===================================================== */
+.tripTypeContainer{
+  margin:1rem 0;padding:1rem;background:rgba(0,0,0,0.2);
+  border-radius:14px;border:1px solid rgba(255,255,255,0.08);
+}
+.tripTypeLabel{font-size:0.875rem;font-weight:600;color:rgba(255,255,255,0.7);margin-bottom:0.75rem;display:block}
+.tripTypeBtns{display:flex;gap:0.625rem;flex-wrap:wrap}
+.tripTypeBtn{
+  padding:0.75rem 1.25rem;border:2px solid rgba(102,126,234,0.3);
+  background:rgba(102,126,234,0.1);color:#fff;border-radius:10px;cursor:pointer;
+  font-weight:600;font-size:clamp(0.8rem,2.5vw,0.9rem);transition:var(--transition-smooth);
+  display:flex;align-items:center;gap:0.4rem;min-height:var(--touch-min);
+  flex:1;justify-content:center;-webkit-tap-highlight-color:transparent;
+}
+.tripTypeBtn:hover{background:rgba(102,126,234,0.25);transform:translateY(-2px)}
+.tripTypeBtn.active{background:var(--primary-gradient);border-color:rgba(255,255,255,0.4);box-shadow:0 0 20px rgba(102,126,234,0.5)}
 
 /* =====================================================
    LIVE HOTEL MODAL
@@ -434,6 +468,75 @@ header::after{
 .nightsAutoNote{font-size:0.72rem;color:rgba(255,255,255,0.45);margin-top:0.3rem}
 
 /* =====================================================
+   HOTEL NAME SEARCH (NEW)
+   ===================================================== */
+.hotelNameSearchContainer{
+  position:relative;margin-bottom:0.75rem;
+}
+.hotelNameSearchDivider{
+  display:flex;align-items:center;gap:0.75rem;margin:0.75rem 0;
+}
+.hotelNameSearchDivider::before,.hotelNameSearchDivider::after{
+  content:'';flex:1;height:1px;background:rgba(255,255,255,0.1);
+}
+.hotelNameSearchDividerText{
+  font-size:0.7rem;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;
+}
+.hotelNameAutocomplete{
+  position:absolute;top:100%;left:0;right:0;z-index:3000;
+  background:linear-gradient(135deg,rgba(15,15,30,0.98),rgba(25,20,40,0.98));
+  border:1px solid rgba(102,126,234,0.4);border-radius:12px;
+  max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  margin-top:4px;
+}
+.hotelNameAutocompleteItem{
+  padding:0.75rem 1rem;cursor:pointer;transition:background 0.2s;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  display:flex;flex-direction:column;gap:0.15rem;
+}
+.hotelNameAutocompleteItem:last-child{border-bottom:none}
+.hotelNameAutocompleteItem:hover{background:rgba(102,126,234,0.2)}
+.hotelNameAutocompleteItem .ac-name{font-weight:600;font-size:0.875rem}
+.hotelNameAutocompleteItem .ac-meta{font-size:0.72rem;color:rgba(255,255,255,0.5)}
+.hotelNameSearchStatus{
+  font-size:0.72rem;padding:0.5rem 0.875rem;color:rgba(255,255,255,0.45);
+  display:flex;align-items:center;gap:0.4rem;
+}
+.hotelNameSearchStatus.searching{color:rgba(102,126,234,0.8)}
+.hotelNameSearchStatus.rate-limited{color:rgba(255,150,50,0.8)}
+.hotelNameSearchStatus.error{color:rgba(255,100,100,0.8)}
+.hotelNameSearchSelectedPill{
+  display:inline-flex;align-items:center;gap:0.4rem;padding:0.4rem 0.75rem;
+  background:linear-gradient(135deg,rgba(102,126,234,0.3),rgba(118,75,162,0.3));
+  border:1px solid rgba(102,126,234,0.5);border-radius:8px;
+  font-size:0.78rem;font-weight:600;margin-top:0.4rem;
+}
+.hotelNameSearchSelectedPill .pill-clear{
+  cursor:pointer;opacity:0.7;font-size:0.9rem;line-height:1;
+  background:none;border:none;color:inherit;padding:0;
+}
+.hotelNameSearchSelectedPill .pill-clear:hover{opacity:1}
+
+/* =====================================================
+   SEARCH MODE TABS (city / hotel-name)
+   ===================================================== */
+.liveSearchModeTabs{
+  display:flex;gap:0.4rem;margin-bottom:0.875rem;
+}
+.liveSearchModeTab{
+  flex:1;padding:0.5rem 0.75rem;border:1px solid rgba(255,255,255,0.15);
+  background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);
+  border-radius:8px;cursor:pointer;font-size:0.8rem;font-weight:600;
+  transition:var(--transition-smooth);text-align:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.liveSearchModeTab.active{
+  background:rgba(102,126,234,0.25);border-color:rgba(102,126,234,0.5);
+  color:#fff;
+}
+.liveSearchModeTab:hover:not(.active){background:rgba(255,255,255,0.08)}
+
+/* =====================================================
    FLIGHT SEARCH STYLES
    ===================================================== */
 .flightTypeContainer{display:flex;gap:0.625rem;margin:0.875rem 0;flex-wrap:wrap}
@@ -487,6 +590,68 @@ header::after{
 .flightChangeBtn.remove:hover{background:rgba(231,76,60,0.15)}
 .flightNoResults{text-align:center;padding:1.5rem;color:rgba(255,255,255,0.5);font-size:0.875rem}
 .flightSearching{text-align:center;padding:1.25rem;color:rgba(255,255,255,0.7);font-size:0.875rem}
+
+/* =====================================================
+   FLIGHT DETAIL CARD (EXPANDABLE)
+   ===================================================== */
+.flightDetailCard{
+  margin-top:0.75rem;padding:1.1rem;background:rgba(0,0,0,0.35);
+  border-radius:14px;border:1px solid rgba(102,126,234,0.3);
+  animation:msgIn 0.4s ease;
+}
+.flightDetailCard .fd-header{
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  gap:0.5rem;flex-wrap:wrap;
+}
+.flightDetailCard .fd-title{font-weight:700;font-size:0.9rem;display:flex;align-items:center;gap:0.4rem}
+.flightDetailCard .fd-toggle{
+  padding:0.25rem 0.625rem;background:rgba(102,126,234,0.2);border:1px solid rgba(102,126,234,0.3);
+  border-radius:6px;font-size:0.75rem;color:rgba(255,255,255,0.7);cursor:pointer;
+  transition:var(--transition-smooth);white-space:nowrap;
+}
+.flightDetailCard .fd-toggle:hover{background:rgba(102,126,234,0.35)}
+.flightDetailCard .fd-body{margin-top:0.875rem;display:none}
+.flightDetailCard .fd-body.open{display:block}
+.flightDetailGrid{display:grid;grid-template-columns:1fr 1fr;gap:0.625rem;margin-bottom:0.75rem}
+.flightDetailItem{display:flex;flex-direction:column;gap:0.15rem}
+.flightDetailItem .fdi-label{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:rgba(255,255,255,0.4)}
+.flightDetailItem .fdi-value{font-size:0.85rem;font-weight:600}
+.flightDetailRouteViz{
+  display:flex;align-items:center;gap:0.5rem;padding:0.75rem;
+  background:rgba(102,126,234,0.08);border-radius:10px;margin-bottom:0.75rem;
+  flex-wrap:wrap;justify-content:space-between;
+}
+.flightDetailRouteViz .fdrv-airport{text-align:center}
+.flightDetailRouteViz .fdrv-code{font-weight:800;font-size:1.2rem;letter-spacing:0.05em}
+.flightDetailRouteViz .fdrv-time{font-size:0.75rem;color:rgba(255,255,255,0.6);margin-top:0.2rem}
+.flightDetailRouteViz .fdrv-line{
+  flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0.2rem;
+  min-width:60px;
+}
+.flightDetailRouteViz .fdrv-arrow{
+  font-size:1.25rem;color:rgba(102,126,234,0.8);
+}
+.flightDetailRouteViz .fdrv-duration{font-size:0.72rem;color:rgba(255,255,255,0.5)}
+.flightDetailRouteViz .fdrv-stops{font-size:0.68rem;color:rgba(255,180,50,0.8)}
+.flightPricingBreakdown{
+  padding:0.75rem;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.07);
+  margin-top:0.5rem;
+}
+.flightPricingBreakdown .fpb-title{font-size:0.75rem;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.06em}
+.flightPricingRow{display:flex;justify-content:space-between;align-items:center;padding:0.25rem 0;font-size:0.8rem;border-bottom:1px solid rgba(255,255,255,0.05)}
+.flightPricingRow:last-child{border-bottom:none;font-weight:700;padding-top:0.5rem;margin-top:0.25rem;border-top:1px solid rgba(255,255,255,0.1)}
+.flightPricingRow .fpr-label{color:rgba(255,255,255,0.6)}
+.flightPricingRow .fpr-value{font-weight:600}
+.flightBaggageInfo{
+  display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.75rem;
+  background:rgba(50,200,100,0.1);border:1px solid rgba(50,200,100,0.25);
+  border-radius:6px;font-size:0.75rem;color:rgba(100,220,130,0.9);margin-top:0.5rem;
+}
+.flightReturnLeg{
+  margin-top:0.75rem;padding:0.75rem;
+  background:rgba(118,75,162,0.08);border-radius:10px;border:1px solid rgba(118,75,162,0.2);
+}
+.flightReturnLeg .frl-title{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:rgba(168,85,247,0.8);margin-bottom:0.5rem}
 
 /* =====================================================
    MOBILE SIDEBAR TOGGLE
@@ -559,6 +724,7 @@ header::after{
   .flightSearchGrid{grid-template-columns:1fr}
   .liveHotelSearchGrid{grid-template-columns:1fr}
   .liveHotelModalBox{padding:1.25rem;border-radius:16px}
+  .flightDetailGrid{grid-template-columns:1fr}
 }
 
 /* Small phones (480px and below) */
@@ -586,10 +752,13 @@ header::after{
   .sightseeingOption{padding:0.75rem}
   .sightseeingRow{gap:0.4rem}
   .addHotelBtn{font-size:0.7rem;padding:0.4rem 0.625rem}
-  #backBtn{top:0.75rem;left:0.75rem;padding:0.5rem 0.875rem;font-size:0.8rem}
+  #navBtnGroup{top:0.75rem;left:0.75rem}
+  #backBtn,#homeBtn{padding:0.5rem 0.75rem;font-size:0.9rem}
   .hotelSourceBtn{font-size:0.75rem;padding:0.625rem 0.875rem}
   .liveHotelModalFooter{flex-direction:column}
   .liveHotelModalConfirmBtn,.liveHotelModalCancelBtn{width:100%}
+  .tripTypeBtns{gap:0.4rem}
+  .tripTypeBtn{font-size:0.8rem;padding:0.625rem 0.875rem}
 }
 
 /* Very small phones */
@@ -600,7 +769,17 @@ header::after{
 </style>
 </head>
 <body>
-<button id="backBtn" onclick="goBack()">← Back</button>
+
+<!-- Nav Button Group (Back + Home) -->
+<div id="navBtnGroup" class="hidden">
+  <button id="backBtn" onclick="goBack()" title="Go Back">←</button>
+  <button id="homeBtn" onclick="goHome()" title="Go Home">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+      <polyline points="9 22 9 12 15 12 15 22"></polyline>
+    </svg>
+  </button>
+</div>
 
 <!-- Mobile sidebar toggle -->
 <button id="sidebarToggle" onclick="toggleMobileSidebar()" aria-label="Toggle trip summary">💰</button>
@@ -611,7 +790,15 @@ header::after{
     <div class="liveHotelModalBox">
         <div class="liveHotelModalTitle">Search Live Hotels</div>
 
-        <div class="liveHotelSearchGrid">
+        <!-- Search Mode Tabs -->
+        <div class="liveSearchModeTabs">
+            <button class="liveSearchModeTab active" id="lhTabCity" onclick="setLiveSearchMode('city')">🏙️ By City</button>
+            <button class="liveSearchModeTab" id="lhTabName" onclick="setLiveSearchMode('name')">🔤 By Hotel Name</button>
+            <button class="liveSearchModeTab" id="lhTabBoth" onclick="setLiveSearchMode('both')">🔍 City + Name</button>
+        </div>
+
+        <!-- City search section -->
+        <div id="lhCitySection" class="liveHotelSearchGrid">
             <div class="liveHotelFormGroup" style="grid-column:1/-1">
                 <label>City / IATA Code</label>
                 <input type="text" id="lhCityCode" class="liveHotelInput" placeholder="e.g. DXB, SIN, BKK, PAR" maxlength="3" style="text-transform:uppercase" />
@@ -624,6 +811,36 @@ header::after{
             <div class="liveHotelFormGroup">
                 <label>Check-Out Date</label>
                 <input type="date" id="lhCheckOut" class="liveHotelInput" oninput="onLiveHotelCheckOutChange()" />
+            </div>
+        </div>
+
+        <!-- Hotel Name search section -->
+        <div id="lhNameSection" style="display:none;margin-bottom:0.875rem;">
+            <div class="liveHotelFormGroup">
+                <label>Hotel Name</label>
+                <div class="hotelNameSearchContainer">
+                    <input type="text" id="lhHotelNameInput" class="liveHotelInput"
+                           placeholder="Type hotel name (e.g. Marriott, Hilton...)"
+                           oninput="onHotelNameInput()"
+                           autocomplete="off" />
+                    <div id="lhHotelNameAutocomplete" class="hotelNameAutocomplete" style="display:none"></div>
+                    <div id="lhHotelNameStatus" class="hotelNameSearchStatus" style="display:none"></div>
+                </div>
+                <div id="lhHotelNameSelectedPill" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- Date fields shown for name-only mode too -->
+        <div id="lhNameDatesSection" style="display:none;margin-bottom:0.875rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+                <div class="liveHotelFormGroup">
+                    <label>Check-In Date</label>
+                    <input type="date" id="lhCheckIn2" class="liveHotelInput" oninput="syncDates2to1()" />
+                </div>
+                <div class="liveHotelFormGroup">
+                    <label>Check-Out Date</label>
+                    <input type="date" id="lhCheckOut2" class="liveHotelInput" oninput="syncDates2to1()" />
+                </div>
             </div>
         </div>
 
@@ -691,9 +908,7 @@ function toggleMobileSidebar(){
     const overlay = document.getElementById('mobileSidebarOverlay');
     const closeBtn = document.getElementById('sidebarCloseBtn');
     const isMobile = window.innerWidth <= 768;
-
     if(!isMobile) return;
-
     const isOpen = sidebar.classList.contains('mobile-open');
     if(isOpen){
         sidebar.classList.remove('mobile-open');
@@ -745,7 +960,6 @@ async function loadAllData(){
         allAddons=await addR.json();
         allCabs=await cabR.json();
         console.log("Data loaded",{regions:allRegions.length,hotels:allHotels.length,transports:allTransports.length,destinations:allDestinations.length,addons:allAddons.length,cabs:allCabs.length});
-
         if(allHotels.length>0 && !selectedHotel) selectedHotel=allHotels[0].internal_name;
         if(allCabs.length>0 && !selectedCab) selectedCab=allCabs[0].internal_name;
     }catch(e){console.error("Data load failed:",e);}
@@ -760,6 +974,13 @@ function getTransportDisplayName(iname){const t=allTransports.find(x=>x.transpor
 function getDestinationDisplayName(iname){const d=allDestinations.find(x=>x.internal_name===iname);return d?d.display_name:iname;}
 function getCabDisplayName(iname){const c=allCabs.find(x=>x.internal_name===iname);return c?c.display_name:iname;}
 function formatCurrency(n){return '₹' + Math.round(n).toLocaleString('en-IN');}
+function formatDateTime(iso){
+    if(!iso) return '—';
+    try{
+        const d=new Date(iso);
+        return d.toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+    }catch(e){return iso;}
+}
 
 /* ============================================================
    STEPS
@@ -770,6 +991,11 @@ let selectedRegionType="",selectedRegion=null,selectedDestination=null,selectedS
 let selectedAdults=2,selectedChildren=0,selectedNights=0,selectedSightseeingDays=0,selectedRooms=0;
 let selectedTransport="",selectedCab="",selectedHotel="",kasolSharing="";
 let sightseeingSelectionsState=[],perNightHotels={},perNightKasolSharing={},selectedAddons=[];
+
+/* ============================================================
+   TRIP TYPE STATE (NEW — ONE WAY / RETURN)
+   ============================================================ */
+let tripType = "return"; // default: return
 
 /* ============================================================
    HOTEL SOURCE STATE
@@ -783,10 +1009,17 @@ let liveHotelState = {
     selectedOffer: null,
     searchResults: [],
     nights: 0,
+    searchMode: 'city',
+    hotelNameQuery: '',
+    hotelNameSelected: null,
 };
 
 function resetLiveHotelState(){
-    liveHotelState = {cityCode:'',checkInDate:'',checkOutDate:'',selectedOffer:null,searchResults:[],nights:0};
+    liveHotelState = {
+        cityCode:'',checkInDate:'',checkOutDate:'',
+        selectedOffer:null,searchResults:[],nights:0,
+        searchMode:'city',hotelNameQuery:'',hotelNameSelected:null
+    };
 }
 
 function resetAdminHotelState(){
@@ -804,11 +1037,13 @@ let flightState = {
     destination: '',
     departureDate: '',
     returnDate: '',
-    selectedOffer: null
+    selectedOffer: null,
+    detailData: null,
+    detailLoading: false,
 };
 
 function resetFlightState(){
-    flightState = {mode:'none',origin:'',destination:'',departureDate:'',returnDate:'',selectedOffer:null};
+    flightState = {mode:'none',origin:'',destination:'',departureDate:'',returnDate:'',selectedOffer:null,detailData:null,detailLoading:false};
 }
 
 function isFlightTransport(transportKey){
@@ -817,6 +1052,238 @@ function isFlightTransport(transportKey){
 }
 
 window.isAIModification=false; window.lastCalculation=null; window.sessionId="session_"+Date.now(); window.cabRequired=false;
+
+/* ============================================================
+   HOTEL NAME AUTOCOMPLETE STATE
+   ============================================================ */
+let hotelNameDebounceTimer = null;
+let hotelNameAbortController = null;
+const HOTEL_NAME_DEBOUNCE_MS = 500;
+
+/* ============================================================
+   LIVE SEARCH MODE
+   ============================================================ */
+function setLiveSearchMode(mode){
+    liveHotelState.searchMode = mode;
+
+    document.getElementById('lhTabCity').classList.toggle('active', mode==='city');
+    document.getElementById('lhTabName').classList.toggle('active', mode==='name');
+    document.getElementById('lhTabBoth').classList.toggle('active', mode==='both');
+
+    // City fields (original)
+    const citySection = document.getElementById('lhCitySection');
+    const nameSection = document.getElementById('lhNameSection');
+    const nameDatesSection = document.getElementById('lhNameDatesSection');
+
+    if(mode === 'city'){
+        citySection.style.display = 'grid';
+        nameSection.style.display = 'none';
+        nameDatesSection.style.display = 'none';
+    } else if(mode === 'name'){
+        citySection.style.display = 'none';
+        nameSection.style.display = 'block';
+        nameDatesSection.style.display = 'block';
+    } else { // both
+        citySection.style.display = 'grid';
+        nameSection.style.display = 'block';
+        nameDatesSection.style.display = 'none';
+    }
+}
+
+/* ============================================================
+   HOTEL NAME AUTOCOMPLETE
+   ============================================================ */
+function onHotelNameInput(){
+    const input = document.getElementById('lhHotelNameInput');
+    const query = (input ? input.value : '').trim();
+    liveHotelState.hotelNameQuery = query;
+
+    // Clear any pending timer
+    if(hotelNameDebounceTimer) clearTimeout(hotelNameDebounceTimer);
+
+    // If query too short, hide dropdown
+    if(query.length < 2){
+        hideHotelNameAutocomplete();
+        return;
+    }
+
+    // Show searching status
+    showHotelNameStatus('searching', '⌛ Searching hotels…');
+
+    // Debounce
+    hotelNameDebounceTimer = setTimeout(()=>{
+        fetchHotelNameAutocomplete(query);
+    }, HOTEL_NAME_DEBOUNCE_MS);
+}
+
+async function fetchHotelNameAutocomplete(query){
+    // Abort previous request if any
+    if(hotelNameAbortController){
+        try{ hotelNameAbortController.abort(); }catch(e){}
+    }
+    hotelNameAbortController = new AbortController();
+
+    try{
+        const url = `${API_BASE}/hotel-lookup?q=${encodeURIComponent(query)}&limit=10`;
+        const resp = await fetch(url, { signal: hotelNameAbortController.signal });
+
+        if(resp.status === 429){
+            showHotelNameStatus('rate-limited', '⚠️ Too many requests. Please wait a moment.');
+            hideHotelNameAutocompleteDropdown();
+            return;
+        }
+
+        const data = await resp.json();
+        hideHotelNameStatus();
+
+        if(data.error && (!data.results || !data.results.length)){
+            showHotelNameStatus('error', `⚠️ ${data.error}`);
+            hideHotelNameAutocompleteDropdown();
+            return;
+        }
+
+        const results = data.results || [];
+        if(!results.length){
+            showHotelNameStatus('error', `No hotels found for "${query}".`);
+            hideHotelNameAutocompleteDropdown();
+            return;
+        }
+
+        renderHotelNameAutocomplete(results);
+
+    }catch(e){
+        if(e.name === 'AbortError') return; // Request was cancelled
+        console.error('Hotel autocomplete error:', e);
+        showHotelNameStatus('error', '⚠️ Hotel lookup unavailable. Please try again.');
+        hideHotelNameAutocompleteDropdown();
+    }
+}
+
+function renderHotelNameAutocomplete(results){
+    const container = document.getElementById('lhHotelNameAutocomplete');
+    if(!container) return;
+
+    container.innerHTML = '';
+    container.style.display = 'block';
+
+    results.forEach(hotel => {
+        const item = document.createElement('div');
+        item.className = 'hotelNameAutocompleteItem';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'ac-name';
+        nameEl.textContent = hotel.hotel_name;
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'ac-meta';
+        const parts = [];
+        if(hotel.city) parts.push(hotel.city);
+        if(hotel.country) parts.push(hotel.country);
+        if(hotel.hotelId) parts.push(`ID: ${hotel.hotelId}`);
+        metaEl.textContent = parts.join(' · ');
+
+        item.append(nameEl, metaEl);
+
+        item.onclick = ()=>{
+            selectHotelNameAutocompleteItem(hotel);
+        };
+
+        container.appendChild(item);
+    });
+
+    // Close autocomplete when clicking outside
+    document.addEventListener('click', closeHotelNameAutocompleteOnClickOutside, {once: true});
+}
+
+function selectHotelNameAutocompleteItem(hotel){
+    liveHotelState.hotelNameSelected = hotel;
+    liveHotelState.hotelNameQuery = hotel.hotel_name;
+
+    const input = document.getElementById('lhHotelNameInput');
+    if(input) input.value = hotel.hotel_name;
+
+    hideHotelNameAutocompleteDropdown();
+    hideHotelNameStatus();
+
+    // Show selected pill
+    renderHotelNameSelectedPill(hotel);
+
+    // If city available from hotel, auto-fill city code
+    if(hotel.iataCode){
+        const cityInput = document.getElementById('lhCityCode');
+        if(cityInput && !cityInput.value) cityInput.value = hotel.iataCode;
+    }
+}
+
+function renderHotelNameSelectedPill(hotel){
+    const pillContainer = document.getElementById('lhHotelNameSelectedPill');
+    if(!pillContainer) return;
+
+    pillContainer.style.display = 'block';
+    const parts = [];
+    if(hotel.city) parts.push(hotel.city);
+    if(hotel.country) parts.push(hotel.country);
+
+    pillContainer.innerHTML = `
+        <div class="hotelNameSearchSelectedPill">
+            🏨 ${hotel.hotel_name}${parts.length?' — '+parts.join(', '):''}
+            <button class="pill-clear" onclick="clearHotelNameSelection()" title="Clear">✕</button>
+        </div>`;
+}
+
+function clearHotelNameSelection(){
+    liveHotelState.hotelNameSelected = null;
+    liveHotelState.hotelNameQuery = '';
+    const input = document.getElementById('lhHotelNameInput');
+    if(input) input.value = '';
+    const pillContainer = document.getElementById('lhHotelNameSelectedPill');
+    if(pillContainer){ pillContainer.style.display = 'none'; pillContainer.innerHTML = ''; }
+}
+
+function hideHotelNameAutocomplete(){
+    hideHotelNameAutocompleteDropdown();
+    hideHotelNameStatus();
+}
+
+function hideHotelNameAutocompleteDropdown(){
+    const container = document.getElementById('lhHotelNameAutocomplete');
+    if(container){ container.style.display = 'none'; container.innerHTML = ''; }
+}
+
+function showHotelNameStatus(type, msg){
+    const statusEl = document.getElementById('lhHotelNameStatus');
+    if(!statusEl) return;
+    statusEl.style.display = 'flex';
+    statusEl.className = `hotelNameSearchStatus ${type}`;
+    statusEl.textContent = msg;
+}
+
+function hideHotelNameStatus(){
+    const statusEl = document.getElementById('lhHotelNameStatus');
+    if(statusEl){ statusEl.style.display = 'none'; statusEl.textContent = ''; }
+}
+
+function closeHotelNameAutocompleteOnClickOutside(e){
+    const container = document.getElementById('lhHotelNameAutocomplete');
+    const input = document.getElementById('lhHotelNameInput');
+    if(container && input && !container.contains(e.target) && e.target !== input){
+        hideHotelNameAutocompleteDropdown();
+    }
+}
+
+function syncDates2to1(){
+    const ci2 = document.getElementById('lhCheckIn2');
+    const co2 = document.getElementById('lhCheckOut2');
+    if(!ci2 || !co2) return;
+    // Sync to the main date fields if they exist
+    const ci1 = document.getElementById('lhCheckIn');
+    const co1 = document.getElementById('lhCheckOut');
+    if(ci1 && ci2.value) ci1.value = ci2.value;
+    if(co1 && co2.value) co1.value = co2.value;
+    liveHotelState.checkInDate = ci2.value;
+    liveHotelState.checkOutDate = co2.value;
+    updateLiveHotelNightsNote();
+}
 
 /* ============================================================
    UI HELPERS
@@ -829,9 +1296,37 @@ function addUser(msg){const d=document.createElement('div');d.className='userMes
 function addTypingIndicator(){const t=document.createElement('div');t.className='botMessage typing-indicator';t.innerHTML='<span></span><span></span><span></span>';t.id='typingIndicator';messages.appendChild(t);scrollToBottom();}
 function removeTypingIndicator(){const t=document.getElementById('typingIndicator');if(t)t.remove();}
 
-function updateBackButton(){document.getElementById("backBtn").style.display=stepHistory.length?"block":"none";}
-function goBack(){if(!stepHistory.length)return;currentStep=stepHistory.pop();optionsContainer.innerHTML="";updateBackButton();updateSummary();renderStep();}
-function autoAdvance(value,nextStep=null){addUser(value);stepHistory.push(currentStep);currentStep=nextStep!==null?nextStep:currentStep+1;updateSummary();setTimeout(()=>renderStep(),300);}
+function updateNavButtons(){
+    const navGroup = document.getElementById('navBtnGroup');
+    if(stepHistory.length > 0){
+        navGroup.classList.remove('hidden');
+        navGroup.classList.add('visible');
+    } else {
+        navGroup.classList.remove('visible');
+        navGroup.classList.add('hidden');
+    }
+}
+function goBack(){if(!stepHistory.length)return;currentStep=stepHistory.pop();optionsContainer.innerHTML="";updateNavButtons();updateSummary();renderStep();}
+
+function goHome(){
+    // Full state reset without page reload
+    currentStep=STEPS.WELCOME;
+    stepHistory=[];
+    selectedRegionType='';selectedRegion=null;selectedDestination=null;selectedSeason='';
+    selectedAdults=2;selectedChildren=0;selectedNights=0;selectedSightseeingDays=0;selectedRooms=0;
+    selectedTransport='';selectedCab='';selectedHotel='';kasolSharing='';
+    sightseeingSelectionsState=[];perNightHotels={};perNightKasolSharing={};selectedAddons=[];
+    tripType='return';
+    hotelSource='admin';
+    resetLiveHotelState();
+    resetFlightState();
+    window.lastCalculation=null;
+    messages.innerHTML='';
+    optionsContainer.innerHTML='';
+    updateNavButtons();
+    updateSummary();
+    renderStep();
+}
 
 async function checkIfCabRequired(){try{const r=await fetch(`${API_BASE}/check-cab-required`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({transport:selectedTransport,days:sightseeingSelectionsState})});const d=await r.json();window.cabRequired=d.cabRequired;}catch(e){window.cabRequired=true;}}
 
@@ -852,7 +1347,9 @@ function getFilteredCabs(){if(!selectedRegion) return allCabs;return allCabs.fil
 /* ============================================================
    STEP RENDERER
    ============================================================ */
-function renderStep(){updateBackButton();optionsContainer.innerHTML="";
+function renderStep(){
+    updateNavButtons();
+    optionsContainer.innerHTML="";
     switch(currentStep){
         case STEPS.WELCOME:renderWelcome();break;
         case STEPS.REGION_TYPE:renderRegionType();break;
@@ -875,7 +1372,16 @@ function renderStep(){updateBackButton();optionsContainer.innerHTML="";
     }
 }
 
-function renderWelcome(){addBot("Hi, I am Sharad, your AI-powered package advisor. Let's create your perfect trip!");setTimeout(()=>{stepHistory.push(currentStep);currentStep=STEPS.REGION_TYPE;renderStep();},1000);}
+function autoAdvance(value,nextStep=null){
+    addUser(value);
+    stepHistory.push(currentStep);
+    currentStep=nextStep!==null?nextStep:currentStep+1;
+    updateNavButtons();
+    updateSummary();
+    setTimeout(()=>renderStep(),300);
+}
+
+function renderWelcome(){addBot("Hi, I am Sharad, your AI-powered package advisor. Let's create your perfect trip!");setTimeout(()=>{stepHistory.push(currentStep);currentStep=STEPS.REGION_TYPE;updateNavButtons();renderStep();},1000);}
 
 function renderRegionType(){addBot("Are you planning a domestic or international trip?");
     ["Domestic","International"].forEach(t=>{const b=document.createElement("button");b.className="optionButton";b.innerText=t;b.onclick=()=>{selectedRegionType=t==="Domestic"?"DOMESTIC":"INTERNATIONAL";autoAdvance(t);};optionsContainer.appendChild(b);});}
@@ -907,12 +1413,10 @@ function renderTravelers(){
     addBot("How many travelers will be joining the trip?");
     const container = document.createElement('div');
     container.className = 'counterSelectorContainer';
-
     const rows = [
         {label:'Adults',key:'adults',min:1,max:20,val:selectedAdults},
         {label:'Children',key:'children',min:0,max:10,val:selectedChildren}
     ];
-
     rows.forEach(({label,key,min,max,val})=>{
         const row=document.createElement('div');row.className='counterRow';
         const lbl=document.createElement('span');lbl.className='counterLabel';lbl.textContent=label;
@@ -920,15 +1424,12 @@ function renderTravelers(){
         const minusBtn=document.createElement('button');minusBtn.className='counterBtn';minusBtn.textContent='-';
         const valueSpan=document.createElement('span');valueSpan.className='counterValue';valueSpan.textContent=val;valueSpan.id=`counter_${key}`;
         const plusBtn=document.createElement('button');plusBtn.className='counterBtn';plusBtn.textContent='+';
-
         minusBtn.onclick=()=>{let cur=parseInt(valueSpan.textContent);if(cur>min){valueSpan.textContent=cur-1;}};
         plusBtn.onclick=()=>{let cur=parseInt(valueSpan.textContent);if(cur<max){valueSpan.textContent=cur+1;}};
-
         controls.append(minusBtn,valueSpan,plusBtn);
         row.append(lbl,controls);
         container.appendChild(row);
     });
-
     const confirmBtn=document.createElement('button');
     confirmBtn.className='optionButton';
     confirmBtn.style.marginTop='1rem';
@@ -937,9 +1438,8 @@ function renderTravelers(){
     confirmBtn.onclick=()=>{
         selectedAdults=parseInt(document.getElementById('counter_adults').textContent);
         selectedChildren=parseInt(document.getElementById('counter_children').textContent);
-        autoAdvance(`${selectedAdults} adult${selectedAdults!==1?'s':''}${selectedChildren>0?`, ${selectedChildren} child${selectedChildren!==1?'ren':''}`:''}`)
+        autoAdvance(`${selectedAdults} adult${selectedAdults!==1?'s':''}${selectedChildren>0?`, ${selectedChildren} child${selectedChildren!==1?'ren':''}`:''}`);
     };
-
     optionsContainer.appendChild(container);
     optionsContainer.appendChild(confirmBtn);
 }
@@ -949,10 +1449,8 @@ function renderTravelers(){
    ============================================================ */
 function renderStayExperience(){
     addBot("How many nights? And how would you like to choose your accommodation?");
-
     const dualContainer = document.createElement('div');
     dualContainer.className = 'dualSelectorContainer';
-
     const nightsCol = document.createElement('div');
     nightsCol.className = 'selectorColumn';
     const nightsLabel = document.createElement('span');
@@ -960,7 +1458,6 @@ function renderStayExperience(){
     nightsLabel.textContent = '🌙 Nights';
     const nightsScroll = document.createElement('div');
     nightsScroll.className = 'horizontalScroll';
-
     for(let i=1;i<=14;i++){
         const opt=document.createElement('button');
         opt.className='magnifyOption'+(i===selectedNights?' active':'');
@@ -976,7 +1473,6 @@ function renderStayExperience(){
         nightsScroll.appendChild(opt);
     }
     nightsCol.append(nightsLabel,nightsScroll);
-
     const sigCol = document.createElement('div');
     sigCol.className = 'selectorColumn';
     const sigLabel = document.createElement('span');
@@ -984,7 +1480,6 @@ function renderStayExperience(){
     sigLabel.textContent = '🗺️ Sightseeing Days';
     const sigScroll = document.createElement('div');
     sigScroll.className = 'horizontalScroll';
-
     for(let i=0;i<=10;i++){
         const opt=document.createElement('button');
         opt.className='magnifyOption'+(i===selectedSightseeingDays?' active':'');
@@ -998,10 +1493,10 @@ function renderStayExperience(){
         sigScroll.appendChild(opt);
     }
     sigCol.append(sigLabel,sigScroll);
-
     dualContainer.append(nightsCol,sigCol);
     optionsContainer.appendChild(dualContainer);
 
+    // Hotel Source
     const sourceContainer = document.createElement('div');
     sourceContainer.className = 'hotelSourceContainer';
     const sourceLabel = document.createElement('span');
@@ -1009,7 +1504,6 @@ function renderStayExperience(){
     sourceLabel.textContent = '🏨 Accommodation Source';
     const sourceBtns = document.createElement('div');
     sourceBtns.className = 'hotelSourceBtns';
-
     const adminBtn = document.createElement('button');
     adminBtn.className = 'hotelSourceBtn' + (hotelSource==='admin'?' active':'');
     adminBtn.innerHTML = '<span class="btn-icon">🗄️</span> Our Hotels';
@@ -1019,10 +1513,10 @@ function renderStayExperience(){
             resetLiveHotelState();
             adminBtn.classList.add('active');
             liveBtn.classList.remove('active');
+            const ac=document.getElementById('adminHotelSelectContainer');if(ac)ac.style.display='block';
             updateSummary();
         }
     };
-
     const liveBtn = document.createElement('button');
     liveBtn.className = 'hotelSourceBtn' + (hotelSource==='live'?' active':'');
     liveBtn.innerHTML = '<span class="btn-icon">🌐</span> Live Hotels (Amadeus)';
@@ -1032,11 +1526,11 @@ function renderStayExperience(){
             resetAdminHotelState();
             liveBtn.classList.add('active');
             adminBtn.classList.remove('active');
+            const ac=document.getElementById('adminHotelSelectContainer');if(ac)ac.style.display='none';
             updateSummary();
             openLiveHotelModal();
         }
     };
-
     sourceBtns.append(adminBtn,liveBtn);
     sourceContainer.append(sourceLabel,sourceBtns);
     optionsContainer.appendChild(sourceContainer);
@@ -1081,15 +1575,12 @@ function renderStayExperience(){
         if(activeNight) selectedNights=parseInt(activeNight.dataset.val);
         const activeSig=sigScroll.querySelector('.magnifyOption.active');
         if(activeSig) selectedSightseeingDays=parseInt(activeSig.dataset.val);
-
         if(selectedNights<=0){addBot("Please select at least 1 night.");return;}
-
         if(hotelSource==='live' && !liveHotelState.selectedOffer){
             addBot("You selected Live Hotels mode. Please search and select a hotel first.");
             openLiveHotelModal();
             return;
         }
-
         let summary = `${selectedNights} night${selectedNights!==1?'s':''}, ${selectedSightseeingDays} sightseeing day${selectedSightseeingDays!==1?'s':''}`;
         if(hotelSource==='live' && liveHotelState.selectedOffer){
             summary += ` | Live Hotel: ${liveHotelState.selectedOffer.hotelName}`;
@@ -1126,7 +1617,6 @@ function renderKasolSharing(parentEl){
     if(!selectedHotel || hotelSource!=='admin') return;
     const hotel = allHotels.find(h=>h.internal_name===selectedHotel);
     if(!hotel || !hotel.is_kasol) return;
-
     const kasolContainer = document.createElement('div');
     kasolContainer.className = 'kasolSharingContainer';
     const lbl = document.createElement('span');
@@ -1157,10 +1647,8 @@ function renderSightseeingSelections(parentEl, replace=false){
         const existing = document.getElementById('sightseeingDynamicContainer');
         if(existing) existing.remove();
     }
-
     const container = document.createElement('div');
     container.id = 'sightseeingDynamicContainer';
-
     const filteredDests = getFilteredDestinations();
     if(!filteredDests.length && selectedSightseeingDays>0){
         const noDestMsg = document.createElement('div');
@@ -1170,22 +1658,17 @@ function renderSightseeingSelections(parentEl, replace=false){
         parentEl.appendChild(container);
         return;
     }
-
     const nights = selectedNights || 3;
     const days = Math.max(nights, selectedSightseeingDays || 0);
-
     while(sightseeingSelectionsState.length < days){sightseeingSelectionsState.push('N/A');}
-
     for(let i=0;i<days;i++){
         const row = document.createElement('div');
         row.className = 'sightseeingOption';
         const rowInner = document.createElement('div');
         rowInner.className = 'sightseeingRow';
-
         const lbl = document.createElement('span');
         lbl.className = 'dayLabel';
         lbl.textContent = `Day ${i+1}`;
-
         const sel = document.createElement('select');
         const naOpt = document.createElement('option');
         naOpt.value='N/A';naOpt.textContent='— No Sightseeing —';
@@ -1198,9 +1681,7 @@ function renderSightseeingSelections(parentEl, replace=false){
         });
         if(sightseeingSelectionsState[i]==='N/A' || !sightseeingSelectionsState[i]) sel.value='N/A';
         sel.onchange=()=>{sightseeingSelectionsState[i]=sel.value;updateSummary();};
-
         rowInner.append(lbl,sel);
-
         if(hotelSource==='admin'){
             const hotelBtn = document.createElement('button');
             hotelBtn.className = 'addHotelBtn';
@@ -1212,11 +1693,9 @@ function renderSightseeingSelections(parentEl, replace=false){
             };
             rowInner.appendChild(hotelBtn);
         }
-
         row.appendChild(rowInner);
         container.appendChild(row);
     }
-
     parentEl.appendChild(container);
 }
 
@@ -1277,12 +1756,10 @@ function renderRooms(){
     controls.append(minusBtn,valueSpan,plusBtn);
     row.append(lbl,controls);
     container.appendChild(row);
-
     const autoNote = document.createElement('div');
     autoNote.style.cssText='font-size:0.8rem;color:rgba(255,255,255,0.5);margin-top:0.5rem;text-align:center';
     autoNote.textContent='Set to 0 to auto-calculate based on travelers and sharing type';
     container.appendChild(autoNote);
-
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'optionButton';
     confirmBtn.style.cssText = 'margin-top:1rem;width:100%';
@@ -1291,18 +1768,43 @@ function renderRooms(){
         selectedRooms=parseInt(document.getElementById('counter_rooms').textContent);
         autoAdvance(selectedRooms===0?'Auto rooms':''+selectedRooms+' room'+(selectedRooms!==1?'s':''));
     };
-
     optionsContainer.append(container,confirmBtn);
 }
 
 /* ============================================================
-   TRANSPORT STEP
+   TRANSPORT STEP (WITH TRIP TYPE ONE WAY / RETURN)
    ============================================================ */
 function renderTransport(){
     addBot("Choose your transport option:");
     const filtered = getFilteredTransports();
     if(!filtered.length){addBot("No transport options available. Please go back.");return;}
 
+    // Trip Type Selection
+    const tripTypeContainer = document.createElement('div');
+    tripTypeContainer.className = 'tripTypeContainer';
+    const tripTypeLabel = document.createElement('span');
+    tripTypeLabel.className = 'tripTypeLabel';
+    tripTypeLabel.textContent = '🔄 Journey Type';
+    const tripTypeBtns = document.createElement('div');
+    tripTypeBtns.className = 'tripTypeBtns';
+
+    [['one_way','🛫 One Way'],['return','🔁 Return (default)']].forEach(([val, label]) => {
+        const btn = document.createElement('button');
+        btn.className = 'tripTypeBtn' + (tripType === val ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+            tripType = val;
+            tripTypeBtns.querySelectorAll('.tripTypeBtn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateSummary();
+        };
+        tripTypeBtns.appendChild(btn);
+    });
+
+    tripTypeContainer.append(tripTypeLabel, tripTypeBtns);
+    optionsContainer.appendChild(tripTypeContainer);
+
+    // Transport options
     filtered.forEach(t=>{
         const b=document.createElement('button');
         b.className='optionButton'+(selectedTransport===t.transport_type?' active':'');
@@ -1329,10 +1831,8 @@ function renderTransport(){
    ============================================================ */
 function renderFlightSection(container){
     addBot("Great! Please configure your flight details:");
-
     const typeContainer = document.createElement('div');
     typeContainer.className = 'flightTypeContainer';
-
     ['none','one_way','return'].forEach(mode=>{
         const b=document.createElement('button');
         b.className='flightTypeBtn'+(flightState.mode===mode?' active':'');
@@ -1343,16 +1843,15 @@ function renderFlightSection(container){
             b.classList.add('active');
             const form=document.getElementById('flightFormSection');
             if(form) form.remove();
+            const detailCard=document.getElementById('flightDetailCardSection');
+            if(detailCard) detailCard.remove();
             if(mode!=='none') renderFlightForm(container, mode);
         };
         typeContainer.appendChild(b);
     });
     container.appendChild(typeContainer);
-
     if(flightState.mode!=='none') renderFlightForm(container, flightState.mode);
-
     if(flightState.selectedOffer) renderFlightSelectedBadge(container);
-
     const skipBtn=document.createElement('button');
     skipBtn.className='optionButton';
     skipBtn.style.cssText='margin-top:1rem;width:100%';
@@ -1367,17 +1866,14 @@ function renderFlightForm(container, mode){
     const form=document.createElement('div');
     form.className='flightSearchForm';
     form.id='flightFormSection';
-
     const grid=document.createElement('div');
     grid.className='flightSearchGrid';
-
     const fields=[
         {label:'From (IATA)',id:'fOrigin',placeholder:'DEL',val:flightState.origin},
         {label:'To (IATA)',id:'fDestination',placeholder:'BOM',val:flightState.destination},
         {label:'Departure Date',id:'fDepartureDate',type:'date',val:flightState.departureDate},
     ];
     if(mode==='return') fields.push({label:'Return Date',id:'fReturnDate',type:'date',val:flightState.returnDate});
-
     fields.forEach(({label,id,placeholder,type,val})=>{
         const grp=document.createElement('div');grp.className='flightFormGroup';
         const lbl=document.createElement('label');lbl.textContent=label;
@@ -1396,17 +1892,14 @@ function renderFlightForm(container, mode){
         grid.appendChild(grp);
     });
     form.appendChild(grid);
-
     const searchBtn=document.createElement('button');
     searchBtn.className='flightSearchBtn';
     searchBtn.textContent='🔍 Search Flights';
     searchBtn.onclick=()=>doFlightSearch(form, mode);
     form.appendChild(searchBtn);
-
     const resultsArea=document.createElement('div');
     resultsArea.id='flightResultsArea';
     form.appendChild(resultsArea);
-
     container.appendChild(form);
 }
 
@@ -1415,69 +1908,58 @@ async function doFlightSearch(formEl, mode){
     const destination=(document.getElementById('fDestination')?.value||'').trim().toUpperCase();
     const departureDate=document.getElementById('fDepartureDate')?.value||'';
     const returnDate=document.getElementById('fReturnDate')?.value||'';
-
     if(!origin||origin.length<2){addBot("Please enter a valid departure IATA code.");return;}
     if(!destination||destination.length<2){addBot("Please enter a valid arrival IATA code.");return;}
     if(!departureDate){addBot("Please enter a departure date.");return;}
     if(mode==='return'&&!returnDate){addBot("Please enter a return date for round-trip.");return;}
-
     const resultsArea=document.getElementById('flightResultsArea');
     if(!resultsArea)return;
     resultsArea.innerHTML='<div class="flightSearching">Searching flights… ✈️</div>';
-
     const searchBtn=formEl.querySelector('.flightSearchBtn');
     if(searchBtn)searchBtn.disabled=true;
-
     try{
         const payload={
             origin,destination,departureDate,adults:selectedAdults,children:selectedChildren,trip_type:mode
         };
         if(mode==='return') payload.returnDate=returnDate;
-
         const resp=await fetch(`${API_BASE}/api/flight-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         const data=await resp.json();
-
         if(data.error&&!data.offers?.length){
             resultsArea.innerHTML=`<div class="flightNoResults">⚠️ ${data.error}<br><small>${data.detail||''}</small></div>`;
             return;
         }
-
         const offers=data.offers||[];
         if(!offers.length){
             resultsArea.innerHTML='<div class="flightNoResults">No flights found for these dates. Try different options.</div>';
             return;
         }
-
         resultsArea.innerHTML='';
         const resultsContainer=document.createElement('div');
         resultsContainer.className='flightResultsContainer';
-
         offers.forEach(offer=>{
             const card=document.createElement('div');
             card.className='flightResultCard'+(flightState.selectedOffer?.id===offer.id?' selected':'');
-
             const header=document.createElement('div');header.className='flightCardHeader';
             const carrier=document.createElement('span');carrier.className='flightCarrier';carrier.textContent=offer.airline;
             const price=document.createElement('span');price.className='flightPrice';price.textContent=formatCurrency(offer.price)+' /person';
             header.append(carrier,price);
-
             const route=document.createElement('div');route.className='flightRoute';
             route.textContent=`${offer.origin} → ${offer.destination}`;
             if(offer.returnDeparture) route.textContent+=` | Return: ${offer.destination} → ${offer.origin}`;
-
             const meta=document.createElement('div');meta.className='flightMeta';
             meta.innerHTML=`<span>✈ ${offer.flightNumber}</span><span>⏱ ${offer.duration}</span><span>🛑 ${offer.stops===0?'Non-stop':offer.stops+' stop'+(offer.stops!==1?'s':'')}</span><span>💺 ${offer.cabinClass||'Economy'}</span>`;
-
             card.append(header,route,meta);
             card.onclick=()=>{
                 resultsContainer.querySelectorAll('.flightResultCard').forEach(c=>c.classList.remove('selected'));
                 card.classList.add('selected');
                 flightState.selectedOffer=offer;
+                flightState.detailData=null;
                 updateSummary();
+                // Fetch and render flight details
+                fetchAndRenderFlightDetail(offer, mode, resultsArea.parentElement);
             };
             resultsContainer.appendChild(card);
         });
-
         resultsArea.appendChild(resultsContainer);
     }catch(e){
         console.error('Flight search error:',e);
@@ -1485,6 +1967,187 @@ async function doFlightSearch(formEl, mode){
     }finally{
         if(searchBtn)searchBtn.disabled=false;
     }
+}
+
+/* ============================================================
+   FLIGHT DETAILS — FETCH + RENDER (NEW)
+   ============================================================ */
+async function fetchAndRenderFlightDetail(offer, mode, containerEl){
+    if(!containerEl) return;
+
+    // Remove any existing detail card
+    const existingDetail = document.getElementById('flightDetailCardSection');
+    if(existingDetail) existingDetail.remove();
+
+    const detailWrapper = document.createElement('div');
+    detailWrapper.id = 'flightDetailCardSection';
+    detailWrapper.innerHTML = '<div class="flightSearching" style="margin-top:0.75rem">Loading flight details… ✈️</div>';
+    containerEl.appendChild(detailWrapper);
+
+    try{
+        const payload = {
+            offer_id: offer.id,
+            origin: offer.origin || (document.getElementById('fOrigin')?.value||'').toUpperCase(),
+            destination: offer.destination || (document.getElementById('fDestination')?.value||'').toUpperCase(),
+            departureDate: offer.departure ? offer.departure.split('T')[0] : (document.getElementById('fDepartureDate')?.value||''),
+            returnDate: (mode==='return') ? (document.getElementById('fReturnDate')?.value||'') : '',
+            adults: selectedAdults,
+            children: selectedChildren,
+            tripType: mode,
+        };
+
+        const resp = await fetch(`${API_BASE}/api/flight-details`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+
+        if(data.error){
+            detailWrapper.innerHTML = `<div class="flightNoResults" style="margin-top:0.75rem">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        flightState.detailData = data;
+        renderFlightDetailCard(detailWrapper, data, offer);
+
+    }catch(e){
+        console.error('Flight details error:', e);
+        detailWrapper.innerHTML = '<div class="flightNoResults" style="margin-top:0.75rem">Could not load flight details.</div>';
+    }
+}
+
+function renderFlightDetailCard(container, detail, offer){
+    if(!container || !detail) return;
+    container.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'flightDetailCard';
+
+    // Header with toggle
+    const header = document.createElement('div');
+    header.className = 'fd-header';
+    const title = document.createElement('div');
+    title.className = 'fd-title';
+    title.innerHTML = `✈ ${detail.airline || offer.airline} · ${detail.flight_number || offer.flightNumber}`;
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'fd-toggle';
+    toggleBtn.textContent = 'Show Details ▼';
+    let isOpen = false;
+    const body = document.createElement('div');
+    body.className = 'fd-body';
+    toggleBtn.onclick = () => {
+        isOpen = !isOpen;
+        body.classList.toggle('open', isOpen);
+        toggleBtn.textContent = isOpen ? 'Hide Details ▲' : 'Show Details ▼';
+    };
+    header.append(title, toggleBtn);
+    card.appendChild(header);
+
+    // Body (expandable)
+    // Route visualization
+    const routeViz = document.createElement('div');
+    routeViz.className = 'flightDetailRouteViz';
+
+    const depAirport = document.createElement('div');
+    depAirport.className = 'fdrv-airport';
+    depAirport.innerHTML = `<div class="fdrv-code">${detail.departure_airport||'—'}</div><div class="fdrv-time">${formatDateTime(detail.departure_time)}</div>${detail.departure_terminal?`<div style="font-size:0.65rem;color:rgba(255,255,255,0.4)">Terminal ${detail.departure_terminal}</div>`:''}`;
+
+    const routeLine = document.createElement('div');
+    routeLine.className = 'fdrv-line';
+    const stopsText = detail.stops===0 ? 'Non-stop' : `${detail.stops} stop${detail.stops!==1?'s':''}`;
+    routeLine.innerHTML = `<div class="fdrv-arrow">✈</div><div class="fdrv-duration">${detail.duration||''}</div><div class="fdrv-stops">${stopsText}</div>`;
+
+    const arrAirport = document.createElement('div');
+    arrAirport.className = 'fdrv-airport';
+    arrAirport.innerHTML = `<div class="fdrv-code">${detail.arrival_airport||'—'}</div><div class="fdrv-time">${formatDateTime(detail.arrival_time)}</div>${detail.arrival_terminal?`<div style="font-size:0.65rem;color:rgba(255,255,255,0.4)">Terminal ${detail.arrival_terminal}</div>`:''}`;
+
+    routeViz.append(depAirport, routeLine, arrAirport);
+    body.appendChild(routeViz);
+
+    // Detail grid
+    const grid = document.createElement('div');
+    grid.className = 'flightDetailGrid';
+    const gridItems = [
+        {label:'Airline', val: detail.airline||'—'},
+        {label:'Flight No.', val: detail.flight_number||'—'},
+        {label:'Cabin Class', val: detail.cabin_class||'Economy'},
+        {label:'Fare Basis', val: detail.fare_basis||'—'},
+    ];
+    gridItems.forEach(({label,val})=>{
+        const item = document.createElement('div');
+        item.className = 'flightDetailItem';
+        item.innerHTML = `<span class="fdi-label">${label}</span><span class="fdi-value">${val}</span>`;
+        grid.appendChild(item);
+    });
+    body.appendChild(grid);
+
+    // Baggage
+    const bag = detail.baggage_allowance;
+    if(bag && (bag.quantity || bag.weight)){
+        const bagEl = document.createElement('div');
+        bagEl.className = 'flightBaggageInfo';
+        const bagText = bag.quantity ? `${bag.quantity} bag${bag.quantity!==1?'s':''}` : '';
+        const weightText = bag.weight ? ` · ${bag.weight}${bag.weightUnit||'KG'}` : '';
+        bagEl.textContent = `🧳 Checked Baggage: ${bagText}${weightText}`;
+        body.appendChild(bagEl);
+    }
+
+    // Return leg (if present)
+    if(detail.return_leg){
+        const rl = detail.return_leg;
+        const returnEl = document.createElement('div');
+        returnEl.className = 'flightReturnLeg';
+        returnEl.innerHTML = `<div class="frl-title">↩ Return Leg</div>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:space-between">
+                <div style="text-align:center"><div style="font-weight:800;font-size:1.1rem">${rl.departureAirport||'—'}</div><div style="font-size:0.72rem;color:rgba(255,255,255,0.55)">${formatDateTime(rl.departureTime)}</div></div>
+                <div style="text-align:center;font-size:0.75rem;color:rgba(255,255,255,0.5)">→ ${rl.duration||''} · ${rl.stops===0?'Non-stop':rl.stops+' stop'+(rl.stops!==1?'s':'')}</div>
+                <div style="text-align:center"><div style="font-weight:800;font-size:1.1rem">${rl.arrivalAirport||'—'}</div><div style="font-size:0.72rem;color:rgba(255,255,255,0.55)">${formatDateTime(rl.arrivalTime)}</div></div>
+            </div>`;
+        body.appendChild(returnEl);
+    }
+
+    // Pricing breakdown
+    const pb = detail.pricing_breakdown;
+    if(pb){
+        const pbEl = document.createElement('div');
+        pbEl.className = 'flightPricingBreakdown';
+        const pbTitle = document.createElement('div');
+        pbTitle.className = 'fpb-title';
+        pbTitle.textContent = 'Pricing Breakdown';
+        pbEl.appendChild(pbTitle);
+
+        const rows = [];
+        if(pb.baseFare) rows.push({label:`Base Fare (${pb.adults||selectedAdults} adult${(pb.adults||selectedAdults)!==1?'s':''})`, val: formatCurrency(pb.baseFare)});
+        if(pb.taxes) rows.push({label:'Taxes & Fees', val: formatCurrency(pb.taxes)});
+        rows.push({label:'Total', val: formatCurrency(pb.grandTotal)});
+
+        rows.forEach(({label,val},idx)=>{
+            const row = document.createElement('div');
+            row.className = 'flightPricingRow';
+            row.innerHTML = `<span class="fpr-label">${label}</span><span class="fpr-value">${val}</span>`;
+            pbEl.appendChild(row);
+        });
+
+        // Per-traveler breakdown
+        if(pb.perTraveler && pb.perTraveler.length){
+            const ptTitle = document.createElement('div');
+            ptTitle.style.cssText='font-size:0.7rem;color:rgba(255,255,255,0.4);margin-top:0.5rem;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em';
+            ptTitle.textContent='Per Traveler';
+            pbEl.appendChild(ptTitle);
+            pb.perTraveler.forEach(pt=>{
+                const ptRow = document.createElement('div');
+                ptRow.className = 'flightPricingRow';
+                ptRow.innerHTML = `<span class="fpr-label">${pt.travelerType} ×${pt.quantity||1}</span><span class="fpr-value">${formatCurrency(pt.total)}</span>`;
+                pbEl.appendChild(ptRow);
+            });
+        }
+
+        body.appendChild(pbEl);
+    }
+
+    card.appendChild(body);
+    container.appendChild(card);
 }
 
 function renderFlightSelectedBadge(container){
@@ -1504,7 +2167,6 @@ function renderCab(){
     addBot("Select a cab for local sightseeing transfers:");
     const filtered = getFilteredCabs();
     if(!filtered.length){addBot("No cabs available. Skipping cab selection.");currentStep=STEPS.ADDONS;setTimeout(()=>renderStep(),500);return;}
-
     filtered.forEach(c=>{
         const b=document.createElement('button');
         b.className='optionButton'+(selectedCab===c.internal_name?' active':'');
@@ -1512,7 +2174,6 @@ function renderCab(){
         b.onclick=()=>{selectedCab=c.internal_name;autoAdvance(c.display_name||c.name);};
         optionsContainer.appendChild(b);
     });
-
     const skipBtn=document.createElement('button');
     skipBtn.className='optionButton';
     skipBtn.style.marginTop='0.5rem';
@@ -1527,16 +2188,13 @@ function renderCab(){
 function renderAddons(){
     addBot("Any add-ons for your trip? (Select all that apply)");
     const filtered = getFilteredAddons();
-
     if(!filtered.length){
         addBot("No add-ons available for this region. Proceeding to price calculation...");
         setTimeout(()=>submitData(),500);
         return;
     }
-
     const container = document.createElement('div');
     container.className = 'addonsContainer';
-
     filtered.forEach(a=>{
         const btn=document.createElement('button');
         btn.className='addonOption'+(selectedAddons.includes(a.internal_name)?' selected':'');
@@ -1550,7 +2208,6 @@ function renderAddons(){
         container.appendChild(btn);
     });
     optionsContainer.appendChild(container);
-
     const confirmBtn=document.createElement('button');
     confirmBtn.className='optionButton';
     confirmBtn.style.cssText='margin-top:1.5rem;width:100%;padding:1rem;font-weight:700;font-size:1rem';
@@ -1570,6 +2227,9 @@ function openLiveHotelModal(){
     const modal = document.getElementById('liveHotelModal');
     modal.classList.add('open');
 
+    // Restore search mode UI
+    setLiveSearchMode(liveHotelState.searchMode || 'city');
+
     const cityInput = document.getElementById('lhCityCode');
     if(cityInput && liveHotelState.cityCode) cityInput.value = liveHotelState.cityCode;
 
@@ -1582,6 +2242,8 @@ function openLiveHotelModal(){
             checkInInput.value = today.toISOString().split('T')[0];
         }
     }
+    const checkInInput2 = document.getElementById('lhCheckIn2');
+    if(checkInInput2 && checkInInput) checkInInput2.value = checkInInput.value;
 
     const checkOutInput = document.getElementById('lhCheckOut');
     if(checkOutInput){
@@ -1593,18 +2255,24 @@ function openLiveHotelModal(){
             checkOutInput.value = ci.toISOString().split('T')[0];
         }
     }
+    const checkOutInput2 = document.getElementById('lhCheckOut2');
+    if(checkOutInput2 && checkOutInput) checkOutInput2.value = checkOutInput.value;
+
+    // Restore hotel name input
+    const hotelNameInput = document.getElementById('lhHotelNameInput');
+    if(hotelNameInput && liveHotelState.hotelNameQuery) hotelNameInput.value = liveHotelState.hotelNameQuery;
+    if(liveHotelState.hotelNameSelected){
+        renderHotelNameSelectedPill(liveHotelState.hotelNameSelected);
+    }
 
     const rooms = selectedRooms > 0 ? selectedRooms : Math.ceil((selectedAdults + selectedChildren) / 2);
     const infoNote = document.getElementById('lhInfoNote');
     if(infoNote){
-        infoNote.textContent = `Travelers: ${selectedAdults} adult${selectedAdults!==1?'s':''}${selectedChildren>0?`, ${selectedChildren} child${selectedChildren!==1?'ren':''}`:''}. Rooms: ${rooms}. (Adjust rooms in Step 5 if needed.)`;
+        infoNote.textContent = `Travelers: ${selectedAdults} adult${selectedAdults!==1?'s':''}${selectedChildren>0?`, ${selectedChildren} child${selectedChildren!==1?'ren':''}`:''} · Rooms: ${rooms}. (Adjust rooms in Step 5 if needed.)`;
     }
-
     updateLiveHotelNightsNote();
-
     const confirmBtn = document.getElementById('lhConfirmBtn');
     if(confirmBtn) confirmBtn.disabled = !liveHotelState.selectedOffer;
-
     if(liveHotelState.searchResults.length > 0){
         renderLiveHotelResults(liveHotelState.searchResults);
     } else {
@@ -1616,7 +2284,7 @@ function openLiveHotelModal(){
 function cancelLiveHotelModal(){
     const modal = document.getElementById('liveHotelModal');
     modal.classList.remove('open');
-
+    hideHotelNameAutocomplete();
     if(!liveHotelState.selectedOffer){
         hotelSource = 'admin';
         resetLiveHotelState();
@@ -1637,9 +2305,7 @@ function onLiveHotelCheckInChange(){
     const checkIn = document.getElementById('lhCheckIn');
     const checkOut = document.getElementById('lhCheckOut');
     if(!checkIn || !checkOut) return;
-
     liveHotelState.checkInDate = checkIn.value;
-
     if(checkIn.value && selectedNights > 0){
         const ci = new Date(checkIn.value);
         ci.setDate(ci.getDate() + selectedNights);
@@ -1653,18 +2319,14 @@ function onLiveHotelCheckOutChange(){
     const checkIn = document.getElementById('lhCheckIn');
     const checkOut = document.getElementById('lhCheckOut');
     if(!checkIn || !checkOut) return;
-
     liveHotelState.checkOutDate = checkOut.value;
-
     if(checkIn.value && checkOut.value){
         const ci = new Date(checkIn.value);
         const co = new Date(checkOut.value);
         const diffDays = Math.round((co - ci) / (1000 * 60 * 60 * 24));
         if(diffDays > 0){
             liveHotelState.nights = diffDays;
-            if(diffDays !== selectedNights){
-                selectedNights = diffDays;
-            }
+            if(diffDays !== selectedNights) selectedNights = diffDays;
         }
     }
     updateLiveHotelNightsNote();
@@ -1675,7 +2337,6 @@ function updateLiveHotelNightsNote(){
     const checkOut = document.getElementById('lhCheckOut');
     const note = document.getElementById('lhNightsNote');
     if(!note) return;
-
     if(checkIn && checkIn.value && checkOut && checkOut.value){
         const ci = new Date(checkIn.value);
         const co = new Date(checkOut.value);
@@ -1693,15 +2354,33 @@ function updateLiveHotelNightsNote(){
 }
 
 async function doLiveHotelSearch(){
-    const cityCodeInput = document.getElementById('lhCityCode');
-    const checkInInput = document.getElementById('lhCheckIn');
-    const checkOutInput = document.getElementById('lhCheckOut');
+    const mode = liveHotelState.searchMode || 'city';
 
-    const cityCode = (cityCodeInput?.value||'').trim().toUpperCase();
-    const checkIn = checkInInput?.value||'';
-    const checkOut = checkOutInput?.value||'';
+    // Gather dates - from primary date fields
+    let checkIn = (document.getElementById('lhCheckIn')?.value || '').trim();
+    let checkOut = (document.getElementById('lhCheckOut')?.value || '').trim();
 
-    if(!cityCode || cityCode.length < 2){addBotInModal('Please enter a valid city IATA code (e.g. DXB, SIN, BKK).');return;}
+    // Fallback to secondary date fields if in name-only mode
+    if(mode === 'name'){
+        const ci2 = document.getElementById('lhCheckIn2')?.value;
+        const co2 = document.getElementById('lhCheckOut2')?.value;
+        if(ci2) checkIn = ci2;
+        if(co2) checkOut = co2;
+    }
+
+    // Gather city code
+    const cityCodeRaw = (document.getElementById('lhCityCode')?.value || '').trim().toUpperCase();
+
+    // Validate based on mode
+    if(mode === 'city' || mode === 'both'){
+        if(!cityCodeRaw || cityCodeRaw.length < 2){addBotInModal('Please enter a valid city IATA code (e.g. DXB, SIN, BKK).');return;}
+    }
+    if(mode === 'name'){
+        if(!liveHotelState.hotelNameSelected && !liveHotelState.hotelNameQuery){
+            addBotInModal('Please type and select a hotel name first.');return;
+        }
+    }
+
     if(!checkIn){addBotInModal('Please select a check-in date.');return;}
     if(!checkOut){addBotInModal('Please select a check-out date.');return;}
     if(checkOut <= checkIn){addBotInModal('Check-out date must be after check-in date.');return;}
@@ -1711,40 +2390,46 @@ async function doLiveHotelSearch(){
     const nightsDiff = Math.round((co - ci) / (1000 * 60 * 60 * 24));
     if(nightsDiff <= 0){addBotInModal('Invalid date range. Please check your dates.');return;}
 
+    // Use city code if available, fallback to hotel's IATA code
+    let cityCode = cityCodeRaw;
+    if(!cityCode && liveHotelState.hotelNameSelected && liveHotelState.hotelNameSelected.iataCode){
+        cityCode = liveHotelState.hotelNameSelected.iataCode;
+    }
+    if(!cityCode && (mode === 'name')){
+        addBotInModal('No city code available. Please also provide a city IATA code or switch to "City + Name" mode.');
+        return;
+    }
+
     liveHotelState.cityCode = cityCode;
     liveHotelState.checkInDate = checkIn;
     liveHotelState.checkOutDate = checkOut;
     liveHotelState.nights = nightsDiff;
 
     const rooms = selectedRooms > 0 ? selectedRooms : Math.ceil((selectedAdults + selectedChildren) / 2);
-
     const resultsArea = document.getElementById('lhResultsArea');
     if(resultsArea) resultsArea.innerHTML = '<div class="liveHotelSearching">Searching live hotels… 🏨</div>';
-
     const searchBtn = document.getElementById('lhSearchBtn');
     if(searchBtn) searchBtn.disabled = true;
 
     try{
         const payload = {
-            cityCode,checkInDate: checkIn,checkOutDate: checkOut,
-            adults: selectedAdults,roomQuantity: rooms
+            cityCode,
+            checkInDate: checkIn,
+            checkOutDate: checkOut,
+            adults: selectedAdults,
+            roomQuantity: rooms
         };
-
         const resp = await fetch(`${API_BASE}/api/hotel-search`, {
             method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify(payload)
         });
         const data = await resp.json();
-
         liveHotelState.searchResults = data.hotels || [];
-
         if(!liveHotelState.searchResults.length){
             const msg = data.message || 'No live hotels found. Try different dates or city code.';
             if(resultsArea) resultsArea.innerHTML = `<div class="liveHotelNoResults">🔍 ${msg}</div>`;
             return;
         }
-
         renderLiveHotelResults(liveHotelState.searchResults);
-
     }catch(e){
         console.error('Live hotel search error:',e);
         if(resultsArea) resultsArea.innerHTML = '<div class="liveHotelNoResults">Hotel search temporarily unavailable. Please try again.</div>';
@@ -1767,60 +2452,46 @@ function renderLiveHotelResults(hotels){
     const resultsArea = document.getElementById('lhResultsArea');
     if(!resultsArea) return;
     resultsArea.innerHTML = '';
-
     if(!hotels || !hotels.length){
         resultsArea.innerHTML = '<div class="liveHotelNoResults">No hotels found for these dates.</div>';
         return;
     }
-
     const resultsContainer = document.createElement('div');
     resultsContainer.className = 'liveHotelResults';
-
     hotels.forEach(hotel=>{
         const card = document.createElement('div');
         const isSelected = liveHotelState.selectedOffer && liveHotelState.selectedOffer.id === hotel.id;
         card.className = 'liveHotelCard' + (isSelected ? ' selected' : '');
-
         const header = document.createElement('div');
         header.className = 'liveHotelCardHeader';
-
         const nameEl = document.createElement('div');
         nameEl.className = 'liveHotelName';
         nameEl.textContent = hotel.hotelName || 'Hotel';
-
         const priceEl = document.createElement('div');
         priceEl.className = 'liveHotelTotalPrice';
         priceEl.textContent = formatCurrency(hotel.totalPrice);
-
         header.append(nameEl, priceEl);
-
         const meta = document.createElement('div');
         meta.className = 'liveHotelMeta';
-
         const roomTypePill = document.createElement('span');
         roomTypePill.textContent = '🛏 ' + (hotel.roomType || 'Standard');
         const boardPill = document.createElement('span');
         boardPill.textContent = '🍽 ' + (hotel.boardType || 'Room Only');
         const cancelPill = document.createElement('span');
         cancelPill.textContent = '📋 ' + (hotel.cancellationPolicy || 'Check policy');
-
         meta.append(roomTypePill, boardPill, cancelPill);
-
         const perNight = document.createElement('div');
         perNight.className = 'liveHotelPerNight';
         const nights = liveHotelState.nights || selectedNights || 1;
         const perNightCalc = nights > 0 ? Math.round(hotel.totalPrice / nights) : hotel.totalPrice;
         perNight.textContent = `≈ ${formatCurrency(perNightCalc)}/night (display only) · ${nights} night${nights!==1?'s':''}`;
-
         if(hotel.originalCurrency && hotel.originalCurrency !== 'INR'){
             const fxNote = document.createElement('div');
             fxNote.style.cssText = 'font-size:0.7rem;color:rgba(255,255,255,0.3);margin-top:0.2rem';
             fxNote.textContent = `Originally ${hotel.originalCurrency} ${(hotel.originalPrice||0).toLocaleString()}`;
             card.appendChild(fxNote);
         }
-
         card.append(header, meta, perNight);
-
         card.onclick=()=>{
             resultsContainer.querySelectorAll('.liveHotelCard').forEach(c=>c.classList.remove('selected'));
             card.classList.add('selected');
@@ -1828,27 +2499,21 @@ function renderLiveHotelResults(hotels){
             const confirmBtn = document.getElementById('lhConfirmBtn');
             if(confirmBtn) confirmBtn.disabled = false;
         };
-
         resultsContainer.appendChild(card);
     });
-
     resultsArea.appendChild(resultsContainer);
 }
 
 function confirmLiveHotelSelection(){
     if(!liveHotelState.selectedOffer){addBotInModal('Please select a hotel first.');return;}
-
     hotelSource = 'live';
-
     const modal = document.getElementById('liveHotelModal');
     modal.classList.remove('open');
-
+    hideHotelNameAutocomplete();
     const badgeArea = document.getElementById('liveHotelBadgeArea');
     if(badgeArea) renderLiveHotelBadge(badgeArea);
-
     const adminContainer = document.getElementById('adminHotelSelectContainer');
     if(adminContainer) adminContainer.style.display = 'none';
-
     updateSummary();
     addBot(`✅ Live hotel selected: ${liveHotelState.selectedOffer.hotelName} — ${formatCurrency(liveHotelState.selectedOffer.totalPrice)} total`);
 }
@@ -1856,33 +2521,25 @@ function confirmLiveHotelSelection(){
 function renderLiveHotelBadge(container){
     if(!container) return;
     container.innerHTML = '';
-
     if(hotelSource !== 'live' || !liveHotelState.selectedOffer) return;
-
     const offer = liveHotelState.selectedOffer;
     const badge = document.createElement('div');
     badge.className = 'liveHotelSelectedBadge';
-
     const nameDiv = document.createElement('div');
     nameDiv.className = 'badge-name';
     nameDiv.textContent = offer.hotelName;
-
     const metaDiv = document.createElement('div');
     metaDiv.className = 'badge-meta';
     metaDiv.textContent = `${offer.roomType||'Standard'} · ${offer.boardType||'Room Only'} · ${liveHotelState.nights||selectedNights} nights`;
-
     const priceDiv = document.createElement('div');
     priceDiv.className = 'badge-price';
     priceDiv.textContent = `${formatCurrency(offer.totalPrice)} total (INR)`;
-
     const btns = document.createElement('div');
     btns.className = 'liveHotelChangeBtns';
-
     const changeBtn = document.createElement('button');
     changeBtn.className = 'liveHotelChangeBtn';
     changeBtn.textContent = '🔄 Change Hotel';
     changeBtn.onclick = (e)=>{e.stopPropagation();openLiveHotelModal();};
-
     const removeBtn = document.createElement('button');
     removeBtn.className = 'liveHotelChangeBtn remove';
     removeBtn.textContent = '✕ Remove';
@@ -1895,7 +2552,6 @@ function renderLiveHotelBadge(container){
         if(adminContainer) adminContainer.style.display = 'block';
         updateSummary();
     };
-
     btns.append(changeBtn, removeBtn);
     badge.append(nameDiv, metaDiv, priceDiv, btns);
     container.appendChild(badge);
@@ -1907,9 +2563,7 @@ function renderLiveHotelBadge(container){
 function updateSummary(){
     const sidebar = document.querySelector('#sidebar .summary');
     if(!sidebar) return;
-
     let html = '';
-
     if(selectedDestination){html+=`<b>📍 Destination:</b> ${selectedDestination}<br>`;}
     if(selectedSeason){html+=`<b>🌤 Season:</b> ${selectedSeason==='ON'?'Peak Season':'Off Season'}<br>`;}
     if(selectedAdults){
@@ -1920,6 +2574,9 @@ function updateSummary(){
     if(selectedNights>0){html+=`<b>🌙 Nights:</b> ${selectedNights}<br>`;}
     if(selectedSightseeingDays>0){html+=`<b>🗺 Sightseeing:</b> ${selectedSightseeingDays} day${selectedSightseeingDays!==1?'s':''}<br>`;}
 
+    // Trip type
+    html+=`<b>🔄 Journey:</b> ${tripType==='return'?'Return':'One Way'}<br>`;
+
     html+=`<b>🏨 Hotel Source:</b> ${hotelSource==='live'?'Live (Amadeus)':'Our Hotels'}<br>`;
     if(hotelSource==='live' && liveHotelState.selectedOffer){
         html+=`<b>🏨 Hotel:</b> ${liveHotelState.selectedOffer.hotelName}<br>`;
@@ -1928,28 +2585,22 @@ function updateSummary(){
     } else if(hotelSource==='admin' && selectedHotel){
         html+=`<b>🏨 Hotel:</b> ${getHotelDisplayName(selectedHotel)}<br>`;
     }
-
     if(selectedRooms>0){html+=`<b>🚪 Rooms:</b> ${selectedRooms}<br>`;}
     if(selectedTransport){html+=`<b>🚌 Transport:</b> ${getTransportDisplayName(selectedTransport)}<br>`;}
     if(selectedCab){html+=`<b>🚗 Cab:</b> ${getCabDisplayName(selectedCab)}<br>`;}
-
     if(flightState.selectedOffer){
         html+=`<b>✈ Flight:</b> ${flightState.selectedOffer.airline} ${flightState.selectedOffer.origin}→${flightState.selectedOffer.destination} ${formatCurrency(flightState.selectedOffer.price)}/pp<br>`;
     }
-
     if(selectedAddons.length>0){
         const names=selectedAddons.map(k=>{const a=allAddons.find(x=>x.internal_name===k);return a?a.name:k;});
         html+=`<b>➕ Add-ons:</b> ${names.join(', ')}<br>`;
     }
-
     const activeDestinations=sightseeingSelectionsState.filter(s=>s&&s!=='N/A');
     if(activeDestinations.length>0){
         const names=activeDestinations.map(k=>getDestinationDisplayName(k));
         html+=`<b>📍 Days:</b> ${names.join(', ')}<br>`;
     }
-
     if(html) html+='<hr>';
-
     if(window.lastCalculation){
         const lc=window.lastCalculation;
         html+=`<div class="price-total-box">
@@ -1968,11 +2619,11 @@ function updateSummary(){
         html+=`<b>🔧 Service:</b> ${formatCurrency(lc.serviceCharge)}<br>`;
         html+=`<b>📋 Booking:</b> ${formatCurrency(lc.bookingCharge)}<br>`;
         if(lc.rooms) html+=`<b>🚪 Rooms:</b> ${lc.rooms}<br>`;
+        if(lc.tripType) html+=`<b>🔄 Trip Type:</b> ${lc.tripType}<br>`;
         if(lc.hotelSource) html+=`<b>🏨 Source:</b> ${lc.hotelSource}<br>`;
         if(lc.appliedRules && lc.appliedRules.length){
             html+=`<b>📜 Rules Applied:</b> ${lc.appliedRules.map(r=>r.name).join(', ')}<br>`;
         }
-
         if(lc.liveHotelMeta){
             const lhm = lc.liveHotelMeta;
             html+=`<hr><b>🌐 Live Hotel Details:</b><br>`;
@@ -1984,17 +2635,15 @@ function updateSummary(){
     } else {
         html += '<span style="color:rgba(255,255,255,0.4);font-size:0.8rem">Complete the steps to see your price quote.</span>';
     }
-
     sidebar.innerHTML = html;
 }
 
 /* ============================================================
-   SUBMIT DATA
+   SUBMIT DATA (WITH TRIP TYPE IN PAYLOAD)
    ============================================================ */
 async function submitData(){
     addTypingIndicator();
     updateSummary();
-
     try{
         const payload = {
             client_id: CLIENT_ID,
@@ -2010,6 +2659,9 @@ async function submitData(){
             days: sightseeingSelectionsState.slice(0, Math.max(selectedNights, selectedSightseeingDays)),
             addons: hotelSource === 'live' ? [] : selectedAddons,
             hotel_source: hotelSource,
+            // Trip type — passed to backend for transport pricing multiplier
+            tripType: tripType,
+            trip_type: tripType,
         };
 
         if(hotelSource === 'admin'){
@@ -2017,7 +2669,6 @@ async function submitData(){
             payload.kasolSharing = kasolSharing;
             payload.perNightKasolSharing = perNightKasolSharing;
         }
-
         if(hotelSource === 'live' && liveHotelState.selectedOffer){
             const offer = liveHotelState.selectedOffer;
             payload.live_hotel = {
@@ -2031,7 +2682,6 @@ async function submitData(){
                 live_hotel_original_currency: offer.originalCurrency || 'INR',
             };
         }
-
         if(flightState.selectedOffer){
             payload.flight = {
                 type: flightState.mode || 'one_way',
@@ -2045,15 +2695,12 @@ async function submitData(){
         const resp = await fetch(`${API_BASE}/calculate`, {
             method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify(payload)
         });
-
         const data = await resp.json();
         removeTypingIndicator();
-
         if(!data.success){
             addBot(`❌ Error: ${data.error || 'Calculation failed. Please try again.'}`);
             return;
         }
-
         window.lastCalculation = data;
         updateSummary();
 
@@ -2072,6 +2719,7 @@ async function submitData(){
         msg+=`  📋 Booking: ${formatCurrency(data.bookingCharge)}\n`;
         if(data.rooms) msg+=`\n🚪 Rooms: ${data.rooms}`;
         if(data.roomAllocation) msg+=` (${data.roomAllocation.allocation_detail})`;
+        if(data.tripType) msg+=`\n🔄 Journey: ${data.tripType}`;
         msg+='\n';
         if(data.hotelSource==='live') msg+=`🌐 Hotel Source: Live (Amadeus)\n`;
         if(data.liveHotelMeta && data.liveHotelMeta.hotelName){
@@ -2080,10 +2728,8 @@ async function submitData(){
         if(data.appliedRules && data.appliedRules.length>0){
             msg+=`\n📜 Rules Applied: ${data.appliedRules.map(r=>r.name).join(', ')}`;
         }
-
         addBot(msg);
 
-        // On mobile, auto-show sidebar with price
         if(window.innerWidth <= 768){
             setTimeout(()=>{
                 const sidebar = document.getElementById('sidebar');
@@ -2115,10 +2761,10 @@ function renderModifyOptions(){
     const options=[
         {label:'Change Hotel',action:()=>{
             if(hotelSource==='live') openLiveHotelModal();
-            else{currentStep=STEPS.STAY_EXPERIENCE;stepHistory.push(currentStep);renderStep();}
+            else{currentStep=STEPS.STAY_EXPERIENCE;stepHistory.push(currentStep);updateNavButtons();renderStep();}
         }},
-        {label:'Change Transport',action:()=>{currentStep=STEPS.TRANSPORT;stepHistory.push(currentStep);renderStep();}},
-        {label:'Modify Travelers',action:()=>{currentStep=STEPS.TRAVELERS;stepHistory.push(currentStep);renderStep();}},
+        {label:'Change Transport',action:()=>{currentStep=STEPS.TRANSPORT;stepHistory.push(currentStep);updateNavButtons();renderStep();}},
+        {label:'Modify Travelers',action:()=>{currentStep=STEPS.TRAVELERS;stepHistory.push(currentStep);updateNavButtons();renderStep();}},
         {label:'Recalculate',action:()=>submitData()},
         {label:'Start Over',action:()=>startOver()},
     ];
@@ -2136,12 +2782,14 @@ function startOver(){
     selectedAdults=2;selectedChildren=0;selectedNights=0;selectedSightseeingDays=0;selectedRooms=0;
     selectedTransport='';selectedCab='';selectedHotel='';kasolSharing='';
     sightseeingSelectionsState=[];perNightHotels={};perNightKasolSharing={};selectedAddons=[];
+    tripType='return';
     hotelSource='admin';
     resetLiveHotelState();
     resetFlightState();
     window.lastCalculation=null;
     messages.innerHTML='';
     optionsContainer.innerHTML='';
+    updateNavButtons();
     updateSummary();
     renderStep();
 }
@@ -2156,7 +2804,6 @@ async function sendAIMessage(){
     input.value='';
     addUser(msg);
     addTypingIndicator();
-
     try{
         const resp=await fetch(`${API_BASE}/ai-chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
             message:msg,sessionId:window.sessionId,
@@ -2165,6 +2812,7 @@ async function sendAIMessage(){
                 adults:selectedAdults,children:selectedChildren,transport:selectedTransport,
                 hotel:hotelSource==='live'?null:selectedHotel,
                 hotelSource,
+                tripType,
             },
             lastCalculation:window.lastCalculation,
             client_id:CLIENT_ID
@@ -2184,7 +2832,6 @@ function handleAIReply(reply){
     if(!reply) return;
     const action=reply.action||'GENERAL_CHAT';
     const msg=reply.message||'';
-
     switch(action){
         case 'SET_HOTEL':
             if(hotelSource==='admin'){selectedHotel=reply.value;addBot(msg);}
@@ -2205,7 +2852,6 @@ function handleAIReply(reply){
         case 'ASK_FIELD':addBot(msg);break;
         default:addBot(msg||"I'm here to help! Ask me anything about your trip.");break;
     }
-
     updateSummary();
     if(['SET_HOTEL','SET_TRANSPORT','SET_ADULTS','SET_CHILDREN','SET_NIGHTS','SET_ROOMS','ADD_ADDON','REMOVE_ADDON'].includes(action)){
         setTimeout(()=>submitData(),500);
@@ -2224,7 +2870,6 @@ function toggleVoiceInput(){
         addBot("Voice input is not supported in your browser. Please use Chrome.");
         return;
     }
-
     if(isListening){
         if(recognition) recognition.stop();
         isListening=false;
@@ -2232,13 +2877,11 @@ function toggleVoiceInput(){
         document.getElementById('voiceStatus').style.opacity='0';
         return;
     }
-
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     recognition=new SpeechRecognition();
     recognition.lang='en-IN';
     recognition.interimResults=false;
     recognition.maxAlternatives=1;
-
     recognition.onstart=()=>{
         isListening=true;
         document.getElementById('voiceBtn').classList.add('listening');
@@ -2246,26 +2889,22 @@ function toggleVoiceInput(){
         statusEl.textContent='Listening…';
         statusEl.style.opacity='1';
     };
-
     recognition.onresult=(event)=>{
         const transcript=event.results[0][0].transcript;
         document.getElementById('aiInput').value=transcript;
         sendAIMessage();
     };
-
     recognition.onerror=()=>{
         isListening=false;
         document.getElementById('voiceBtn').classList.remove('listening');
         document.getElementById('voiceStatus').style.opacity='0';
         addBot("Voice input error. Please try again.");
     };
-
     recognition.onend=()=>{
         isListening=false;
         document.getElementById('voiceBtn').classList.remove('listening');
         document.getElementById('voiceStatus').style.opacity='0';
     };
-
     recognition.start();
 }
 
