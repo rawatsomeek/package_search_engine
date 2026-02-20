@@ -9,6 +9,40 @@
         html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f7fa;min-height:100vh;overflow-x:hidden}
 
+{% if mode == 'login' %}
+        /* ===== LOGIN PAGE STYLES ===== */
+        body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;min-height:100vh}
+        .login-wrap{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:40px;width:100%;max-width:420px;margin:20px}
+        .login-logo{text-align:center;margin-bottom:28px}
+        .login-logo h1{font-size:26px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .login-logo p{color:#888;font-size:13px;margin-top:4px}
+        .login-tabs{display:flex;gap:4px;background:#f0f0f0;border-radius:8px;padding:4px;margin-bottom:24px}
+        .login-tab{flex:1;padding:9px;text-align:center;border:none;background:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;color:#666;transition:.2s}
+        .login-tab.active{background:#fff;color:#667eea;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+        .login-panel{display:none}.login-panel.active{display:block}
+        .form-group{margin-bottom:16px}
+        .form-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px}
+        .form-group input{width:100%;padding:11px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;transition:.2s;-webkit-appearance:none}
+        .form-group input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+        .login-btn{width:100%;padding:13px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:.2s;margin-top:8px}
+        .login-btn:hover{opacity:.9;transform:translateY(-1px)}
+        .login-btn:active{transform:translateY(0)}
+        .login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+        .login-err{background:#fff0f0;border:1px solid #ffd0d0;color:#c0392b;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
+        .login-err.show{display:block}
+        .pin-inputs{display:flex;gap:8px;justify-content:center;margin-bottom:8px}
+        .pin-inputs input{width:48px;height:56px;text-align:center;font-size:22px;font-weight:700;border:2px solid #e0e0e0;border-radius:10px;-webkit-appearance:none;appearance:none;background:#fafafa;transition:.2s}
+        .pin-inputs input:focus{border-color:#667eea;background:#fff;box-shadow:0 0 0 3px rgba(102,126,234,.15);outline:none}
+        .pin-inputs input::-webkit-outer-spin-button,.pin-inputs input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+        .pin-inputs input[type=number]{-moz-appearance:textfield}
+        .passkey-btn{width:100%;padding:14px;background:#f8f9ff;border:2px dashed #667eea;color:#667eea;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;gap:10px}
+        .passkey-btn:hover{background:#eef0ff;border-style:solid}
+        .passkey-btn svg{width:24px;height:24px;flex-shrink:0}
+        .passkey-info{font-size:12px;color:#999;text-align:center;margin-top:10px;line-height:1.5}
+        .setup-link{text-align:center;margin-top:20px;font-size:13px;color:#888}
+        .setup-link a{color:#667eea;font-weight:600;text-decoration:none}
+        .setup-link a:hover{text-decoration:underline}
+{% else %}
         /* ===== HEADER ===== */
         .header{
             background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;
@@ -204,7 +238,7 @@
 
         /* ===== MULTIPLIER FIELD VISIBILITY ===== */
         .multiplier-group{transition:opacity .2s}
-        .multiplier-group.hidden-field{opacity:0.4;pointer-events:none}
+        .multiplier-group.hidden-field{display:none;opacity:0;pointer-events:none}
 
         /* ===== MOBILE NAV ===== */
         .mobile-tab-scroll{
@@ -276,9 +310,334 @@
             .tab{font-size:9px;padding:6px 7px}
             .container{padding:0 6px}
         }
+{% endif %}
     </style>
 </head>
 <body>
+
+{% if mode == 'login' %}
+<!-- ============================================================
+     LOGIN PAGE — Point 1 (v4.0)
+     Multi-method: Password / PIN / Passkey (WebAuthn biometric)
+     All auth is backend-validated. No frontend-only checks.
+     NO "Remember Me" — sessions expire on browser close.
+     ============================================================ -->
+<div class="login-wrap">
+    <div class="login-logo">
+        <h1>Global Calc</h1>
+        <p>Enterprise Travel Pricing System</p>
+    </div>
+
+    <div id="loginErr" class="login-err"></div>
+
+    <div class="login-tabs">
+        <button class="login-tab active" onclick="switchLoginTab('password')">🔑 Password</button>
+        <button class="login-tab" onclick="switchLoginTab('pin')">🔢 PIN</button>
+        {% if webauthn_available %}
+        <button class="login-tab" onclick="switchLoginTab('passkey')">🔒 Passkey</button>
+        {% endif %}
+    </div>
+
+    <!-- ── Password Panel ── -->
+    <div class="login-panel active" id="panel-password">
+        <div class="form-group">
+            <label for="pw-username">Username</label>
+            <input type="text" id="pw-username" autocomplete="username" placeholder="admin" />
+        </div>
+        <div class="form-group">
+            <label for="pw-password">Password</label>
+            <input type="password" id="pw-password" autocomplete="current-password" placeholder="••••••••"
+                   onkeydown="if(event.key==='Enter')submitPassword()" />
+        </div>
+        <button class="login-btn" id="pw-btn" onclick="submitPassword()">Sign In</button>
+    </div>
+
+    <!-- ── PIN Panel ── -->
+    <div class="login-panel" id="panel-pin">
+        <div class="form-group">
+            <label for="pin-username">Username</label>
+            <input type="text" id="pin-username" autocomplete="username" placeholder="admin" />
+        </div>
+        <div class="form-group" style="margin-top:4px">
+            <label>PIN (4–6 digits)</label>
+            <div class="pin-inputs" id="pinInputs">
+                <input type="number" maxlength="1" min="0" max="9" class="pin-cell" data-idx="0" inputmode="numeric" />
+                <input type="number" maxlength="1" min="0" max="9" class="pin-cell" data-idx="1" inputmode="numeric" />
+                <input type="number" maxlength="1" min="0" max="9" class="pin-cell" data-idx="2" inputmode="numeric" />
+                <input type="number" maxlength="1" min="0" max="9" class="pin-cell" data-idx="3" inputmode="numeric" />
+                <input type="number" maxlength="1" min="0" max="9" class="pin-cell" data-idx="4" inputmode="numeric" />
+                <input type="number" maxlength="1" min="0" max="9" class="pin-cell" data-idx="5" inputmode="numeric" />
+            </div>
+        </div>
+        <button class="login-btn" id="pin-btn" onclick="submitPin()">Sign In with PIN</button>
+    </div>
+
+    {% if webauthn_available %}
+    <!-- ── Passkey Panel ── -->
+    <div class="login-panel" id="panel-passkey">
+        <div class="form-group">
+            <label for="pk-username">Username</label>
+            <input type="text" id="pk-username" autocomplete="username" placeholder="admin" />
+        </div>
+        <button class="passkey-btn" id="pk-btn" onclick="submitPasskey()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1C8.7 1 6 3.7 6 7c0 2.4 1.3 4.5 3.3 5.6L8 20h8l-1.3-7.4C16.7 11.5 18 9.4 18 7c0-3.3-2.7-6-6-6z"/>
+                <circle cx="12" cy="7" r="2.5" fill="currentColor" stroke="none"/>
+            </svg>
+            Authenticate with Face ID / Fingerprint
+        </button>
+        <p class="passkey-info">Uses your device's built-in biometric sensor.<br>No password needed once registered.</p>
+    </div>
+    {% endif %}
+
+    <div class="setup-link">
+        First time? <a href="/admin/setup-page" id="setupLink">Set up admin account</a>
+    </div>
+</div>
+
+<script>
+// ── Login page JavaScript ──────────────────────────────────────────────────────
+
+function showLoginErr(msg) {
+    const el = document.getElementById('loginErr');
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+function hideLoginErr() {
+    document.getElementById('loginErr').classList.remove('show');
+}
+
+function switchLoginTab(tab) {
+    document.querySelectorAll('.login-tab').forEach((t, i) => {
+        const panels = ['password', 'pin', 'passkey'];
+        t.classList.toggle('active', panels[i] === tab);
+    });
+    document.querySelectorAll('.login-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('panel-' + tab);
+    if (panel) panel.classList.add('active');
+    hideLoginErr();
+}
+
+// ── Password Login ──────────────────────────────────────────────────────────────
+async function submitPassword() {
+    hideLoginErr();
+    const username = document.getElementById('pw-username').value.trim();
+    const password = document.getElementById('pw-password').value;
+    const btn = document.getElementById('pw-btn');
+
+    if (!username || !password) {
+        showLoginErr('Please enter username and password.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+
+    try {
+        const res = await fetch('/admin/auth/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = data.redirect || '/admin';
+        } else {
+            showLoginErr(data.error || 'Invalid credentials. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+        }
+    } catch (e) {
+        showLoginErr('Connection error. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+    }
+}
+
+// ── PIN Login ──────────────────────────────────────────────────────────────────
+(function setupPinInputs() {
+    const cells = document.querySelectorAll('.pin-cell');
+    cells.forEach((cell, idx) => {
+        cell.addEventListener('input', function() {
+            const val = this.value.replace(/[^0-9]/g, '');
+            this.value = val.slice(-1);
+            if (this.value && idx < cells.length - 1) {
+                cells[idx + 1].focus();
+            }
+            // Auto-submit when all 4–6 cells filled
+            const pin = Array.from(cells).map(c => c.value).join('');
+            if (pin.length >= 4 && cells[cells.length - 1].value) {
+                submitPin();
+            }
+        });
+        cell.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && !this.value && idx > 0) {
+                cells[idx - 1].focus();
+                cells[idx - 1].value = '';
+            }
+            if (e.key === 'Enter') submitPin();
+        });
+        cell.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g,'');
+            pasted.split('').slice(0, cells.length).forEach((ch, i) => {
+                if (cells[i]) cells[i].value = ch;
+            });
+            const last = Math.min(pasted.length, cells.length) - 1;
+            if (cells[last]) cells[last].focus();
+            if (pasted.length >= 4) setTimeout(submitPin, 100);
+        });
+    });
+})();
+
+async function submitPin() {
+    hideLoginErr();
+    const username = document.getElementById('pin-username').value.trim();
+    const pin = Array.from(document.querySelectorAll('.pin-cell')).map(c => c.value).join('');
+    const btn = document.getElementById('pin-btn');
+
+    if (!username) { showLoginErr('Please enter your username.'); return; }
+    if (!/^\d{4,6}$/.test(pin)) { showLoginErr('Please enter your full 4–6 digit PIN.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+
+    try {
+        const res = await fetch('/admin/auth/pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, pin })
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = data.redirect || '/admin';
+        } else {
+            showLoginErr(data.error || 'Invalid credentials. Please try again.');
+            document.querySelectorAll('.pin-cell').forEach(c => c.value = '');
+            document.querySelector('.pin-cell').focus();
+            btn.disabled = false;
+            btn.textContent = 'Sign In with PIN';
+        }
+    } catch (e) {
+        showLoginErr('Connection error. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Sign In with PIN';
+    }
+}
+
+// ── WebAuthn Passkey Login ─────────────────────────────────────────────────────
+async function submitPasskey() {
+    hideLoginErr();
+    const username = document.getElementById('pk-username').value.trim();
+    const btn = document.getElementById('pk-btn');
+
+    if (!username) { showLoginErr('Please enter your username first.'); return; }
+
+    if (!window.PublicKeyCredential) {
+        showLoginErr('This browser or device does not support passkeys. Please use password login.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<span>Waiting for biometric…</span>`;
+
+    try {
+        // Step 1: Get authentication options from server
+        const beginRes = await fetch('/admin/webauthn/login/begin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const beginData = await beginRes.json();
+
+        if (!beginData.success) {
+            showLoginErr(beginData.error || 'Failed to start passkey authentication.');
+            btn.disabled = false;
+            btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1C8.7 1 6 3.7 6 7c0 2.4 1.3 4.5 3.3 5.6L8 20h8l-1.3-7.4C16.7 11.5 18 9.4 18 7c0-3.3-2.7-6-6-6z"/><circle cx="12" cy="7" r="2.5" fill="currentColor" stroke="none"/></svg> Authenticate with Face ID / Fingerprint`;
+            return;
+        }
+
+        const options = beginData.options;
+
+        // Step 2: Decode challenge and credential IDs from base64url
+        const publicKeyOptions = {
+            challenge: base64urlToBytes(options.challenge),
+            rpId: options.rpId,
+            timeout: options.timeout || 60000,
+            allowCredentials: (options.allowCredentials || []).map(c => ({
+                type: 'public-key',
+                id: base64urlToBytes(c.id),
+            })),
+            userVerification: options.userVerification || 'required',
+        };
+
+        // Step 3: Trigger device biometric prompt
+        const credential = await navigator.credentials.get({ publicKey: publicKeyOptions });
+
+        // Step 4: Send response to server for verification
+        const credentialJSON = {
+            id: credential.id,
+            rawId: bytesToBase64url(new Uint8Array(credential.rawId)),
+            type: credential.type,
+            response: {
+                authenticatorData: bytesToBase64url(new Uint8Array(credential.response.authenticatorData)),
+                clientDataJSON: bytesToBase64url(new Uint8Array(credential.response.clientDataJSON)),
+                signature: bytesToBase64url(new Uint8Array(credential.response.signature)),
+                userHandle: credential.response.userHandle
+                    ? bytesToBase64url(new Uint8Array(credential.response.userHandle))
+                    : null,
+            },
+        };
+
+        const completeRes = await fetch('/admin/webauthn/login/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, credential: credentialJSON })
+        });
+        const completeData = await completeRes.json();
+
+        if (completeData.success) {
+            window.location.href = completeData.redirect || '/admin';
+        } else {
+            showLoginErr(completeData.error || 'Passkey verification failed.');
+            btn.disabled = false;
+            btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1C8.7 1 6 3.7 6 7c0 2.4 1.3 4.5 3.3 5.6L8 20h8l-1.3-7.4C16.7 11.5 18 9.4 18 7c0-3.3-2.7-6-6-6z"/><circle cx="12" cy="7" r="2.5" fill="currentColor" stroke="none"/></svg> Authenticate with Face ID / Fingerprint`;
+        }
+
+    } catch (e) {
+        if (e.name === 'NotAllowedError') {
+            showLoginErr('Passkey authentication was cancelled or timed out.');
+        } else if (e.name === 'SecurityError') {
+            showLoginErr('Security error — ensure you are on a secure HTTPS connection.');
+        } else {
+            showLoginErr('Passkey error: ' + e.message);
+        }
+        btn.disabled = false;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1C8.7 1 6 3.7 6 7c0 2.4 1.3 4.5 3.3 5.6L8 20h8l-1.3-7.4C16.7 11.5 18 9.4 18 7c0-3.3-2.7-6-6-6z"/><circle cx="12" cy="7" r="2.5" fill="currentColor" stroke="none"/></svg> Authenticate with Face ID / Fingerprint`;
+    }
+}
+
+// ── WebAuthn base64url helpers ─────────────────────────────────────────────────
+function base64urlToBytes(b64url) {
+    const b64 = b64url.replace(/-/g,'+').replace(/_/g,'/');
+    const bin = atob(b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '='));
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+function bytesToBase64url(bytes) {
+    let bin = '';
+    bytes.forEach(b => bin += String.fromCharCode(b));
+    return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+// Auto-focus first input
+document.querySelector('#pw-username').focus();
+</script>
+
+{% else %}
+<!-- ============================================================
+     ADMIN DASHBOARD — Only shown when session is authenticated
+     ============================================================ -->
 <div class="header">
     <h1>Admin Panel — Enterprise Travel Pricing</h1>
     <div class="header-right">
@@ -286,6 +645,7 @@
             <option value="1">Loading clients...</option>
         </select>
         <a href="/" class="btn-logout">← Back to App</a>
+        <a href="/admin/logout" class="btn-logout" style="background:rgba(255,80,80,.25)">🔓 Logout</a>
     </div>
 </div>
 
@@ -906,16 +1266,61 @@ function editClient(id) {
     document.getElementById('editModal').classList.add('show');
 }
 
+/**
+ * Point 2 (v4.0): Fixed toggleEntity
+ *
+ * Changes:
+ *   1. Properly awaits the fetch — no race condition between toggle and loadAll
+ *   2. Backend now returns {success, active, message} — use returned active state
+ *   3. Instead of full loadAll() reload, updates the in-memory cached array and
+ *      re-renders only the specific entity table. This eliminates race conditions.
+ */
 async function toggleEntity(type, id, active) {
+    // Map API type to the in-memory array and re-render function for targeted update
+    const typeMap = {
+        'clients':       { arr: () => allClients,      set: v => { allClients = v; },      render: displayClients },
+        'regions':       { arr: () => allRegions,       set: v => { allRegions = v; },       render: displayRegions },
+        'transports':    { arr: () => allTransports,    set: v => { allTransports = v; },    render: displayTransports },
+        'hotels':        { arr: () => allHotels,        set: v => { allHotels = v; },        render: displayHotels },
+        'destinations':  { arr: () => allDestinations,  set: v => { allDestinations = v; },  render: displayDestinations },
+        'cabs':          { arr: () => allCabs,          set: v => { allCabs = v; },          render: displayCabs },
+        'addons':        { arr: () => allAddons,        set: v => { allAddons = v; },        render: displayAddons },
+        'pricing-rules': { arr: () => allPricingRules,  set: v => { allPricingRules = v; },  render: displayPricingRules },
+    };
+
     try {
-        const res = await fetch(`${API}/api/${type}/${id}/toggle`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active})});
+        const res = await fetch(`${API}/api/${type}/${id}/toggle`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ active })
+        });
+
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        showMsg('Status updated');
-        loadAll();
+
+        const data = await res.json();
+        const actualActive = data.active !== undefined ? data.active : active;
+
+        // Update the in-memory cached array — no full reload needed
+        const mapping = typeMap[type];
+        if (mapping) {
+            const arr = mapping.arr();
+            if (Array.isArray(arr)) {
+                const updated = arr.map(item => item.id === id ? { ...item, active: actualActive } : item);
+                mapping.set(updated);
+                // Re-render only the affected table
+                if (typeof mapping.render === 'function') {
+                    mapping.render();
+                }
+            }
+        }
+
+        showMsg(data.message || 'Status updated');
+
     } catch (e) {
         console.error('Toggle error:', e);
         showMsg('Failed to toggle status', 'error');
-        loadAll();
+        // On error: revert checkbox and reload to ensure consistent state
+        await loadAll();
     }
 }
 
@@ -1666,4 +2071,5 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
 (async()=>{await loadAll();})();
 </script>
 </body>
+{% endif %}
 </html>

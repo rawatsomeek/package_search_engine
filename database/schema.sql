@@ -1,6 +1,6 @@
 -- =====================================================
 -- TRAVEL PRICING RULE ENGINE - ENTERPRISE SCHEMA
--- Version 4.0 — HARD DELETE + TRANSPORT TRIP TYPE + MIGRATIONS
+-- Version 5.0 — ADMIN AUTH + WEBAUTHN + BOOKINGS + HARD DELETE + TRANSPORT TRIP TYPE
 -- =====================================================
 
 -- =====================================================
@@ -355,6 +355,62 @@ VALUES (1, 15.00, 12.00, 0.00, 0.00, 0.00)
 ON CONFLICT (client_id) DO NOTHING;
 
 -- =====================================================
+-- ADMIN USERS — Point 1 (v4.0)
+-- Multi-method authentication: password, PIN, WebAuthn
+-- password_hash and pin_hash are bcrypt hashed (NEVER plaintext)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS admin_users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255),          -- bcrypt hash of password
+    pin_hash VARCHAR(255),               -- bcrypt hash of 4-6 digit PIN (nullable if not set)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- MIGRATION: Create admin_users if it doesn't exist (idempotent via IF NOT EXISTS)
+
+-- =====================================================
+-- WEBAUTHN CREDENTIALS — Point 1 (v4.0)
+-- Stores passkey/biometric credentials per admin user.
+-- credential_id is the raw bytes from Amadeus WebAuthn library.
+-- public_key is the COSE-encoded public key bytes.
+-- sign_count prevents credential replay attacks.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    id SERIAL PRIMARY KEY,
+    admin_user_id INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    credential_id BYTEA NOT NULL UNIQUE,
+    public_key BYTEA NOT NULL,
+    sign_count INTEGER NOT NULL DEFAULT 0,
+    device_name VARCHAR(100),            -- optional human-readable device label
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- BOOKINGS — Point 3 (v4.0)
+-- Stores both Amadeus flight PNR and hotel confirmation.
+-- flight_pnr and hotel_confirmation are ALWAYS separate columns.
+-- These two references MUST NEVER be merged into a single field.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS bookings (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+    internal_ref VARCHAR(50) NOT NULL UNIQUE,     -- GC-XXXXXXXX internal reference
+    flight_pnr VARCHAR(30),                        -- Amadeus flight PNR (e.g. ABC123), null if no flight
+    hotel_confirmation VARCHAR(100),               -- Amadeus hotel confirmation ref, null if no hotel
+    flight_offer_id VARCHAR(200),                  -- cached offer ID used for flight booking
+    hotel_offer_id VARCHAR(200),                   -- cached offer ID used for hotel booking
+    traveler_details JSONB,                        -- array of traveler objects
+    flight_booking_response JSONB,                 -- raw Amadeus flight order response
+    hotel_booking_response JSONB,                  -- raw Amadeus hotel booking response
+    status VARCHAR(50) NOT NULL DEFAULT 'confirmed'
+        CHECK (status IN ('confirmed', 'partial', 'failed', 'cancelled')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
 -- AI CHAT SESSIONS
 -- =====================================================
 CREATE TABLE IF NOT EXISTS ai_sessions (
@@ -385,3 +441,10 @@ CREATE INDEX IF NOT EXISTS idx_pricing_rules_client ON pricing_rules(client_id);
 CREATE INDEX IF NOT EXISTS idx_pricing_rules_entity ON pricing_rules(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_pricing_rules_priority ON pricing_rules(client_id, priority);
 CREATE INDEX IF NOT EXISTS idx_ai_sessions_session ON ai_sessions(session_id);
+-- v4.0 new indexes
+CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_admin ON webauthn_credentials(admin_user_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_client ON bookings(client_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_internal_ref ON bookings(internal_ref);
+CREATE INDEX IF NOT EXISTS idx_bookings_flight_pnr ON bookings(flight_pnr) WHERE flight_pnr IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_hotel_conf ON bookings(hotel_confirmation) WHERE hotel_confirmation IS NOT NULL;
