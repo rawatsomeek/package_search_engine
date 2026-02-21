@@ -57,8 +57,8 @@ POINT 7 — OPENAI gpt-4o INTELLIGENCE:
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from flask_cors import CORS
 from functools import wraps
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 import json
 import os
 import logging
