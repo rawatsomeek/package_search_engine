@@ -57,8 +57,8 @@ POINT 7 — OPENAI gpt-4o INTELLIGENCE:
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from flask_cors import CORS
 from functools import wraps
-import psycopg
-from psycopg.rows import dict_row
+import psycopg2
+import psycopg2.extras
 import json
 import os
 import logging
@@ -129,6 +129,20 @@ from pricing_engine import (
     check_cab_required,
 )
 
+# ── Email (smtplib — for approval notifications) ──────────────────────────────
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+# ── Owner / system constants ───────────────────────────────────────────────────
+# HARDCODED: Only this email address may approve or reject admin requests.
+# This value MUST NOT be overridable by any environment variable or user input.
+OWNER_EMAIL = 'rawatsomeek@gmail.com'
+
+# Token expiry durations
+ADMIN_REQUEST_EXPIRY_HOURS = 48          # approve/reject link TTL
+RESET_TOKEN_EXPIRY_HOURS   = 2           # password-reset link TTL after approval
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -142,6 +156,12 @@ logger = logging.getLogger(__name__)
 # =====================================================
 
 OFFER_CACHE_TTL_SECONDS = 3600  # 1 hour
+
+# ── System Owner (hardcoded — cannot be changed by env or user input) ──────────
+# Only this email address may approve/reject admin requests and recovery requests.
+OWNER_EMAIL = 'rawatsomeek@gmail.com'
+ADMIN_REQUEST_EXPIRY_HOURS = 48   # approve/reject link TTL
+RESET_TOKEN_EXPIRY_HOURS   = 2    # password-reset link TTL after approval
 
 _raw_flight_offers_cache: dict = {}
 # Structure: { offer_id: { 'offer': <raw_amadeus_offer_dict>, 'expires_at': <timestamp> } }
@@ -1393,6 +1413,700 @@ def admin_set_pin():
     except Exception as e:
         logger.error(f"admin_set_pin error: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
+
+# =====================================================
+# EMAIL HELPER — SMTP-based notification sender
+# =====================================================
+
+import smtplib as _smtplib
+from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+from email.mime.text import MIMEText as _MIMEText
+import datetime as _datetime
+
+def _send_email_notification(to_address: str, subject: str, html_body: str) -> bool:
+    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '').strip()
+    smtp_pass = os.environ.get('SMTP_PASSWORD', '').strip()
+    from_email = os.environ.get('FROM_EMAIL', smtp_user).strip() or smtp_user
+
+    if not smtp_user or not smtp_pass:
+        logger.warning(
+            "SMTP credentials not configured — email not sent. "
+            "Set SMTP_USER and SMTP_PASSWORD env vars."
+        )
+        return False
+
+    try:
+        msg = _MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f'Global Calc Admin <{from_email}>'
+        msg['To'] = to_address
+        msg.attach(_MIMEText(html_body, 'html', 'utf-8'))
+
+        with _smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(from_email, [to_address], msg.as_string())
+
+        logger.info(f"Email sent to {to_address}: {subject}")
+        return True
+
+    except _smtplib.SMTPAuthenticationError:
+        logger.error(
+            "SMTP authentication failed. Use an App Password for Gmail: "
+            "myaccount.google.com/apppasswords"
+        )
+        return False
+    except Exception as exc:
+        logger.error(f"Email send failed to {to_address}: {exc}", exc_info=True)
+        return False
+
+
+def _get_app_base_url() -> str:
+    configured = os.environ.get('APP_URL', '').strip().rstrip('/')
+    if configured:
+        return configured
+    try:
+        host = request.host
+        proto = request.headers.get('X-Forwarded-Proto', '')
+        scheme = proto if proto in ('https', 'http') else (
+            'https' if 'localhost' not in host else 'http'
+        )
+        return f'{scheme}://{host}'
+    except RuntimeError:
+        return 'https://your-app.onrender.com'
+
+
+def _generate_secure_token() -> str:
+    return uuid.uuid4().hex + uuid.uuid4().hex  # 64 hex chars
+
+
+def _build_owner_request_email(req: dict, base_url: str) -> str:
+    approve_url = f"{base_url}/admin/approve-request/{req['approve_token']}"
+    reject_url  = f"{base_url}/admin/reject-request/{req['reject_token']}"
+    req_type_label = {
+        'signup':           'New Admin Account Request',
+        'forgot_password':  'Password Recovery Request',
+        'forgot_username':  'Username Recovery Request',
+    }.get(req['request_type'], 'Admin Request')
+
+    rows = ''
+    for label, key in [('Full Name','full_name'),('Username','username'),
+                        ('Email','email'),('Company','company'),('Phone','phone')]:
+        val = req.get(key)
+        if val:
+            mono = ' style="font-family:monospace;"' if key == 'username' else ''
+            rows += (f"<tr><td style='padding:6px 12px;color:#555;font-weight:600;'>{label}</td>"
+                     f"<td style='padding:6px 12px;color:#333;'{mono}>{val}</td></tr>")
+    rows += (f"<tr><td style='padding:6px 12px;color:#555;font-weight:600;'>Request Type</td>"
+             f"<td style='padding:6px 12px;color:#333;'>{req['request_type']}</td></tr>")
+    rows += (f"<tr><td style='padding:6px 12px;color:#555;font-weight:600;'>Submitted</td>"
+             f"<td style='padding:6px 12px;color:#333;'>{req.get('created_at','')}</td></tr>")
+    rows += (f"<tr><td style='padding:6px 12px;color:#555;font-weight:600;'>Expires</td>"
+             f"<td style='padding:6px 12px;color:#e74c3c;'>{req.get('expires_at','')} (48 h)</td></tr>")
+
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>{req_type_label}</title></head>
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fa;padding:40px 20px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+  <tr><td style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:28px 32px;">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;">Global Calc Admin</h1>
+    <p style="color:rgba(255,255,255,.85);margin:6px 0 0;font-size:14px;">{req_type_label}</p>
+  </td></tr>
+  <tr><td style="padding:28px 32px;">
+    <p style="color:#333;font-size:15px;margin:0 0 20px;">A new request requires your review and approval:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f9fa;border-radius:8px;border:1px solid #e9ecef;margin-bottom:24px;"><tbody>{rows}</tbody></table>
+    <p style="color:#555;font-size:13px;margin:0 0 20px;background:#fff3cd;padding:12px;border-radius:6px;border-left:4px solid #ffc107;">
+      <strong>Security notice:</strong> These links are single-use and expire in 48 hours. Only you (the system owner) should click them.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td width="48%" align="center">
+        <a href="{approve_url}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;width:100%;box-sizing:border-box;text-align:center;">APPROVE REQUEST</a>
+      </td>
+      <td width="4%"></td>
+      <td width="48%" align="center">
+        <a href="{reject_url}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;width:100%;box-sizing:border-box;text-align:center;">REJECT REQUEST</a>
+      </td>
+    </tr></table>
+    <p style="color:#999;font-size:11px;margin:20px 0 0;text-align:center;">
+      If you did not expect this request, ignore this email. No action = no account created.
+    </p>
+  </td></tr>
+  <tr><td style="background:#f8f9fa;padding:16px 32px;text-align:center;">
+    <p style="color:#aaa;font-size:11px;margin:0;">Global Calc Enterprise Travel Pricing - Owner notifications only</p>
+  </td></tr>
+</table></td></tr></table></body></html>"""
+
+
+def _build_approval_email_for_user(req: dict) -> str:
+    if req['request_type'] == 'signup':
+        body = (f"<p style='color:#333;font-size:15px;margin:0 0 16px;'>Your admin account request has been <strong style='color:#27ae60;'>approved!</strong></p>"
+                f"<p style='color:#555;font-size:14px;margin:0 0 16px;'>Log in using the username and password you submitted.</p>"
+                f"<p style='color:#555;font-size:14px;margin:0 0 24px;'><strong>Username:</strong> <code style='background:#f0f0f0;padding:2px 8px;border-radius:4px;'>{req.get('username','N/A')}</code></p>"
+                f"<a href='/admin/login' style='display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;'>Log in to Admin Panel</a>")
+    else:
+        body = (f"<p style='color:#333;font-size:15px;margin:0 0 16px;'>Your recovery request has been <strong style='color:#27ae60;'>approved!</strong></p>"
+                f"<p style='color:#555;font-size:14px;margin:0 0 24px;'>Use the button below to reset your password. This link expires in <strong>2 hours</strong>.</p>"
+                f"<a href='/admin/reset-password/{req.get('reset_token','')}' style='display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;'>Reset My Password</a>")
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Request Approved</title></head>
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fa;padding:40px 20px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+  <tr><td style="background:linear-gradient(135deg,#27ae60,#2ecc71);padding:28px 32px;">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;">Global Calc Admin</h1>
+    <p style="color:rgba(255,255,255,.9);margin:6px 0 0;font-size:14px;">Access Approved</p>
+  </td></tr>
+  <tr><td style="padding:28px 32px;">{body}</td></tr>
+  <tr><td style="background:#f8f9fa;padding:16px 32px;text-align:center;">
+    <p style="color:#aaa;font-size:11px;margin:0;">Global Calc Enterprise Travel Pricing</p>
+  </td></tr>
+</table></td></tr></table></body></html>"""
+
+
+def _build_rejection_email_for_user(req: dict, note: str = '') -> str:
+    note_html = (f"<p style='color:#555;font-size:14px;margin:0 0 16px;background:#f8f9fa;padding:12px;border-radius:6px;border-left:4px solid #e74c3c;'><strong>Reason:</strong> {note}</p>"
+                 if note else '')
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Request Not Approved</title></head>
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fa;padding:40px 20px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+  <tr><td style="background:linear-gradient(135deg,#e74c3c,#c0392b);padding:28px 32px;">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;">Global Calc Admin</h1>
+    <p style="color:rgba(255,255,255,.9);margin:6px 0 0;font-size:14px;">Request Not Approved</p>
+  </td></tr>
+  <tr><td style="padding:28px 32px;">
+    <p style="color:#333;font-size:15px;margin:0 0 16px;">Your admin access request has been <strong style='color:#e74c3c;'>not approved</strong> by the system owner.</p>
+    {note_html}
+    <p style="color:#555;font-size:14px;margin:0;">If you believe this is in error, please contact the system administrator directly.</p>
+  </td></tr>
+  <tr><td style="background:#f8f9fa;padding:16px 32px;text-align:center;">
+    <p style="color:#aaa;font-size:11px;margin:0;">Global Calc Enterprise Travel Pricing</p>
+  </td></tr>
+</table></td></tr></table></body></html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN REQUEST ROUTES  — Full approval-based admin management system
+# Owner: rawatsomeek@gmail.com (HARDCODED — cannot be changed via URL or env)
+# ─────────────────────────────────────────────────────────────────────────────
+
+OWNER_EMAIL = 'rawatsomeek@gmail.com'
+ADMIN_REQUEST_EXPIRY_HOURS = 48
+RESET_TOKEN_EXPIRY_HOURS   = 2
+
+
+@app.route('/admin/setup-page', methods=['GET'])
+def admin_setup_page():
+    """Render the public 'Request Admin Access' form (mode=setup)."""
+    return render_template('admin.html', mode='setup')
+
+
+@app.route('/admin/request-access', methods=['POST'])
+def admin_request_access():
+    """
+    Submit a new admin account request.
+    Validates fields, hashes password/PIN, stores pending request,
+    and emails the hardcoded owner (rawatsomeek@gmail.com) with approve/reject links.
+    No admin_users record is created until the owner approves.
+    """
+    if not BCRYPT_AVAILABLE:
+        return jsonify({'error': 'Server configuration error: bcrypt not installed.'}), 500
+    try:
+        data = request.get_json() if request.is_json else request.form.to_dict()
+
+        username  = str(data.get('username',  '')).strip()
+        password  = str(data.get('password',  '')).strip()
+        pin       = str(data.get('pin',       '')).strip()
+        full_name = str(data.get('full_name', '')).strip()
+        email     = str(data.get('email',     '')).strip().lower()
+        company   = str(data.get('company',   '')).strip()
+        phone     = str(data.get('phone',     '')).strip()
+
+        errors = []
+        if not username:
+            errors.append('Username is required.')
+        elif len(username) > 100:
+            errors.append('Username must be 100 characters or fewer.')
+        elif not re.match(r'^[a-zA-Z0-9_.\-]+$', username):
+            errors.append('Username may only contain letters, numbers, underscores, dots, and hyphens.')
+        if not password:
+            errors.append('Password is required.')
+        elif len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
+        if pin and not re.match(r'^\d{4,6}$', pin):
+            errors.append('PIN must be 4-6 digits if provided.')
+        if not full_name:
+            errors.append('Full name is required.')
+        if not email or not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+            errors.append('A valid email address is required.')
+        if errors:
+            return jsonify({'error': ' | '.join(errors)}), 400
+
+        # Prevent owner email impersonation
+        if email.lower() == OWNER_EMAIL.lower():
+            return jsonify({'error': 'This email address cannot be used for access requests.'}), 403
+
+        db = get_db()
+        cur = db.cursor()
+        # Duplicate pending check
+        cur.execute(
+            "SELECT id FROM admin_requests WHERE username=%s AND status='pending' AND request_type='signup'",
+            (username,)
+        )
+        if cur.fetchone():
+            db.close()
+            return jsonify({'error': 'A pending request for this username already exists.'}), 409
+        # Username already exists check
+        cur.execute("SELECT id FROM admin_users WHERE username=%s", (username,))
+        if cur.fetchone():
+            db.close()
+            return jsonify({'error': 'This username is already taken.'}), 409
+
+        password_hash = _hash_password(password)
+        pin_hash = _hash_password(pin) if pin else None
+        approve_token = _generate_secure_token()
+        reject_token  = _generate_secure_token()
+        expires_at = _datetime.datetime.utcnow() + _datetime.timedelta(hours=ADMIN_REQUEST_EXPIRY_HOURS)
+
+        cur.execute(
+            """INSERT INTO admin_requests
+               (request_type, username, password_hash, pin_hash, company, email,
+                full_name, phone, status, approve_token, reject_token, expires_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'pending',%s,%s,%s)
+               RETURNING id, created_at, expires_at""",
+            ('signup', username, password_hash, pin_hash, company, email,
+             full_name, phone, approve_token, reject_token, expires_at)
+        )
+        row = cur.fetchone()
+        req_id, created_at, expires_at_stored = row[0], row[1], row[2]
+        db.commit()
+        db.close()
+        logger.info(f"Admin signup request #{req_id} for '{username}' from '{email}'")
+
+        base_url = _get_app_base_url()
+        req_dict = {
+            'request_type': 'signup', 'username': username, 'email': email,
+            'full_name': full_name, 'company': company, 'phone': phone,
+            'approve_token': approve_token, 'reject_token': reject_token,
+            'created_at': str(created_at), 'expires_at': str(expires_at_stored),
+        }
+        email_sent = _send_email_notification(
+            OWNER_EMAIL,
+            f'[Global Calc] Admin Access Request - {full_name or username}',
+            _build_owner_request_email(req_dict, base_url),
+        )
+        if not email_sent:
+            logger.warning(f"Owner notification email failed for request #{req_id}. Request saved in DB.")
+
+        return jsonify({
+            'success': True,
+            'message': ('Your request has been submitted and is awaiting owner approval. '
+                        'You will receive an email once the owner reviews it (up to 48 hours).')
+        })
+    except Exception as exc:
+        logger.error(f"admin_request_access error: {exc}", exc_info=True)
+        return jsonify({'error': 'Failed to submit request. Please try again.'}), 500
+
+
+@app.route('/admin/approve-request/<token>', methods=['GET'])
+def admin_approve_request(token):
+    """
+    Owner-only: approve a pending admin signup request via email link.
+    Creates the admin_users record. Token prevents direct URL manipulation.
+    """
+    try:
+        if not token or len(token) < 32:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid approval token.'), 400
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            """SELECT id, request_type, username, password_hash, pin_hash,
+                      email, full_name, status, expires_at
+               FROM admin_requests WHERE approve_token=%s""",
+            (token,)
+        )
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error',
+                                   outcome_message='This approval link is invalid or has already been used.'), 404
+        req_id, req_type, username, password_hash, pin_hash, email, full_name, status, expires_at = row
+
+        if status in ('approved', 'rejected'):
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='already_done',
+                                   outcome_message=f'This request has already been {status}.'), 200
+
+        if _datetime.datetime.utcnow() > expires_at:
+            cur.execute("UPDATE admin_requests SET status='expired', updated_at=NOW() WHERE id=%s", (req_id,))
+            db.commit(); db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error',
+                                   outcome_message='This approval link has expired (48-hour window).'), 410
+
+        try:
+            cur.execute(
+                "INSERT INTO admin_users (username, password_hash, pin_hash) VALUES (%s,%s,%s) RETURNING id",
+                (username, password_hash, pin_hash)
+            )
+            new_admin_id = cur.fetchone()[0]
+        except Exception as insert_err:
+            db.rollback(); db.close()
+            logger.error(f"approve_request insert admin_users failed: {insert_err}")
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error',
+                                   outcome_message=f'Could not create account: {insert_err}'), 500
+
+        cur.execute(
+            "UPDATE admin_requests SET status='approved', processed_at=NOW(), updated_at=NOW() WHERE id=%s",
+            (req_id,)
+        )
+        db.commit(); db.close()
+        logger.info(f"Admin request #{req_id} APPROVED — created admin user '{username}' (id={new_admin_id})")
+
+        req_dict = {'request_type': req_type, 'username': username, 'reset_token': None}
+        _send_email_notification(email,
+            '[Global Calc] Your Admin Access Has Been Approved',
+            _build_approval_email_for_user(req_dict))
+
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='approved',
+                               outcome_message=f'Admin account for "{username}" created. User notified at {email}.'), 200
+    except Exception as exc:
+        logger.error(f"admin_approve_request error: {exc}", exc_info=True)
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='error', outcome_message=str(exc)), 500
+
+
+@app.route('/admin/reject-request/<token>', methods=['GET'])
+def admin_reject_request(token):
+    """Owner-only: reject a pending admin signup request via email link."""
+    try:
+        if not token or len(token) < 32:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid rejection token.'), 400
+        note = request.args.get('note', '').strip()
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            "SELECT id, username, email, status FROM admin_requests WHERE reject_token=%s",
+            (token,)
+        )
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error',
+                                   outcome_message='This rejection link is invalid or has already been used.'), 404
+        req_id, username, email, status = row
+        if status in ('approved', 'rejected'):
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='already_done',
+                                   outcome_message=f'This request has already been {status}.'), 200
+        cur.execute(
+            "UPDATE admin_requests SET status='rejected', owner_note=%s, processed_at=NOW(), updated_at=NOW() WHERE id=%s",
+            (note or None, req_id)
+        )
+        db.commit(); db.close()
+        logger.info(f"Admin request #{req_id} REJECTED — '{username}' / '{email}'")
+        _send_email_notification(email,
+            '[Global Calc] Admin Access Request - Not Approved',
+            _build_rejection_email_for_user({'request_type': 'signup', 'username': username}, note))
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='rejected',
+                               outcome_message=f'Request from "{username}" ({email}) rejected. User notified.'), 200
+    except Exception as exc:
+        logger.error(f"admin_reject_request error: {exc}", exc_info=True)
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='error', outcome_message=str(exc)), 500
+
+
+@app.route('/admin/forgot', methods=['GET'])
+def admin_forgot_page():
+    """Render the forgot password / username page."""
+    return render_template('admin.html', mode='forgot')
+
+
+@app.route('/admin/forgot-request', methods=['POST'])
+def admin_forgot_request():
+    """
+    Submit a password or username recovery request.
+    Owner gets an approval email; reset link sent to user only after approval.
+    Prevents reset without approval.
+    """
+    try:
+        data = request.get_json() if request.is_json else request.form.to_dict()
+        recovery_type = str(data.get('recovery_type', 'forgot_password')).strip()
+        email         = str(data.get('email', '')).strip().lower()
+        username_hint = str(data.get('username', '')).strip()
+
+        if recovery_type not in ('forgot_password', 'forgot_username'):
+            return jsonify({'error': 'Invalid recovery type.'}), 400
+        if not email or not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+            return jsonify({'error': 'A valid email address is required.'}), 400
+        if email.lower() == OWNER_EMAIL.lower():
+            return jsonify({'error': 'This email cannot be used for recovery requests.'}), 403
+
+        db = get_db()
+        cur = db.cursor()
+
+        # Verify username exists if provided (silent for security — prevent enumeration)
+        if username_hint:
+            cur.execute("SELECT id FROM admin_users WHERE username=%s", (username_hint,))
+            if not cur.fetchone():
+                db.close()
+                logger.info(f"Recovery for non-existent username '{username_hint}' — returning generic success")
+                return jsonify({'success': True, 'message': 'If this account exists, the owner will be notified. Check your email for updates.'}), 200
+
+        # Rate limit: 1 pending request per email per 2 hours
+        cur.execute(
+            """SELECT id FROM admin_requests
+               WHERE email=%s AND status='pending'
+               AND request_type IN ('forgot_password','forgot_username')
+               AND created_at > NOW() - INTERVAL '2 hours'""",
+            (email,)
+        )
+        if cur.fetchone():
+            db.close()
+            return jsonify({'success': True, 'message': 'A recovery request is already pending. Please wait or try again in 2 hours.'}), 200
+
+        approve_token = _generate_secure_token()
+        reject_token  = _generate_secure_token()
+        expires_at = _datetime.datetime.utcnow() + _datetime.timedelta(hours=ADMIN_REQUEST_EXPIRY_HOURS)
+
+        cur.execute(
+            """INSERT INTO admin_requests
+               (request_type, username, email, status, approve_token, reject_token, expires_at)
+               VALUES (%s,%s,%s,'pending',%s,%s,%s)
+               RETURNING id, created_at, expires_at""",
+            (recovery_type, username_hint or None, email, approve_token, reject_token, expires_at)
+        )
+        row = cur.fetchone()
+        req_id, created_at, expires_at_stored = row[0], row[1], row[2]
+        db.commit(); db.close()
+        logger.info(f"Recovery request #{req_id} type='{recovery_type}' for email='{email}'")
+
+        base_url = _get_app_base_url()
+        req_dict = {
+            'request_type': recovery_type,
+            'username': username_hint or '(not specified)',
+            'email': email, 'full_name': '', 'company': '', 'phone': '',
+            'approve_token': approve_token, 'reject_token': reject_token,
+            'created_at': str(created_at), 'expires_at': str(expires_at_stored),
+        }
+        label = 'Password Recovery' if recovery_type == 'forgot_password' else 'Username Recovery'
+        _send_email_notification(OWNER_EMAIL,
+            f'[Global Calc] Admin {label} Request - {email}',
+            _build_owner_request_email(req_dict, base_url))
+
+        return jsonify({'success': True,
+                        'message': 'Recovery request submitted. The owner will review it and email you with further instructions.'})
+    except Exception as exc:
+        logger.error(f"admin_forgot_request error: {exc}", exc_info=True)
+        return jsonify({'error': 'Failed to submit recovery request.'}), 500
+
+
+@app.route('/admin/approve-recovery/<token>', methods=['GET'])
+def admin_approve_recovery(token):
+    """Owner-only: approve a recovery request. Generates reset_token and emails user."""
+    try:
+        if not token or len(token) < 32:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid token.'), 400
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            "SELECT id, request_type, username, email, status, expires_at FROM admin_requests WHERE approve_token=%s",
+            (token,)
+        )
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid or already-used approval link.'), 404
+        req_id, req_type, username, email, status, expires_at = row
+        if status in ('approved', 'rejected'):
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='already_done', outcome_message=f'This request was already {status}.'), 200
+        if _datetime.datetime.utcnow() > expires_at:
+            cur.execute("UPDATE admin_requests SET status='expired', updated_at=NOW() WHERE id=%s", (req_id,))
+            db.commit(); db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Approval link expired.'), 410
+
+        reset_token = _generate_secure_token()
+        reset_expires = _datetime.datetime.utcnow() + _datetime.timedelta(hours=RESET_TOKEN_EXPIRY_HOURS)
+        cur.execute(
+            """UPDATE admin_requests
+               SET status='approved', reset_token=%s, reset_token_expires_at=%s,
+                   processed_at=NOW(), updated_at=NOW()
+               WHERE id=%s""",
+            (reset_token, reset_expires, req_id)
+        )
+        db.commit(); db.close()
+        logger.info(f"Recovery request #{req_id} APPROVED — reset link sent to '{email}'")
+        req_dict = {'request_type': req_type, 'username': username, 'reset_token': reset_token}
+        _send_email_notification(email, '[Global Calc] Password Reset Link Approved',
+                                 _build_approval_email_for_user(req_dict))
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='approved',
+                               outcome_message=f'Recovery approved. Reset link emailed to {email} (valid 2 hours).'), 200
+    except Exception as exc:
+        logger.error(f"admin_approve_recovery error: {exc}", exc_info=True)
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='error', outcome_message=str(exc)), 500
+
+
+@app.route('/admin/reject-recovery/<token>', methods=['GET'])
+def admin_reject_recovery(token):
+    """Owner-only: reject a recovery request."""
+    try:
+        if not token or len(token) < 32:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid token.'), 400
+        note = request.args.get('note', '').strip()
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            "SELECT id, username, email, status FROM admin_requests WHERE reject_token=%s",
+            (token,)
+        )
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid or already-used rejection link.'), 404
+        req_id, username, email, status = row
+        if status in ('approved', 'rejected'):
+            db.close()
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='already_done', outcome_message=f'Already {status}.'), 200
+        cur.execute(
+            "UPDATE admin_requests SET status='rejected', owner_note=%s, processed_at=NOW(), updated_at=NOW() WHERE id=%s",
+            (note or None, req_id)
+        )
+        db.commit(); db.close()
+        logger.info(f"Recovery request #{req_id} REJECTED for '{email}'")
+        _send_email_notification(email, '[Global Calc] Recovery Request - Not Approved',
+                                 _build_rejection_email_for_user({'request_type': 'forgot_password', 'username': username}, note))
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='rejected',
+                               outcome_message=f'Recovery for {email} rejected. User notified.'), 200
+    except Exception as exc:
+        logger.error(f"admin_reject_recovery error: {exc}", exc_info=True)
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='error', outcome_message=str(exc)), 500
+
+
+@app.route('/admin/reset-password/<reset_token>', methods=['GET'])
+def admin_reset_password_page(reset_token):
+    """
+    Render password-reset form.
+    Validates reset_token before showing the form — invalid/expired tokens get
+    an error page, preventing any reset without prior owner approval.
+    """
+    try:
+        if not reset_token or len(reset_token) < 32:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error', outcome_message='Invalid reset token.'), 400
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            """SELECT id, username, reset_token_expires_at FROM admin_requests
+               WHERE reset_token=%s AND status='approved'""",
+            (reset_token,)
+        )
+        row = cur.fetchone()
+        db.close()
+        if not row:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error',
+                                   outcome_message='This password-reset link is invalid, already used, or not approved.'), 404
+        req_id, username, token_expires = row
+        if token_expires and _datetime.datetime.utcnow() > token_expires:
+            return render_template('admin.html', mode='request_outcome',
+                                   outcome='error',
+                                   outcome_message='This reset link has expired (2-hour window). Submit a new recovery request.'), 410
+        return render_template('admin.html', mode='reset_password',
+                               reset_token=reset_token, reset_username=username)
+    except Exception as exc:
+        logger.error(f"admin_reset_password_page error: {exc}", exc_info=True)
+        return render_template('admin.html', mode='request_outcome',
+                               outcome='error', outcome_message=str(exc)), 500
+
+
+@app.route('/admin/reset-password/<reset_token>', methods=['POST'])
+def admin_reset_password_submit(reset_token):
+    """
+    Process password reset. Validates token freshness, updates admin_users,
+    and invalidates the reset_token to prevent reuse.
+    """
+    try:
+        if not BCRYPT_AVAILABLE:
+            return jsonify({'error': 'Server configuration error.'}), 500
+        data = request.get_json() if request.is_json else request.form.to_dict()
+        new_password = str(data.get('password', '')).strip()
+        new_pin      = str(data.get('pin', '')).strip()
+
+        if not new_password or len(new_password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters.'}), 400
+        if new_pin and not re.match(r'^\d{4,6}$', new_pin):
+            return jsonify({'error': 'PIN must be 4-6 digits if provided.'}), 400
+
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            """SELECT id, username, reset_token_expires_at FROM admin_requests
+               WHERE reset_token=%s AND status='approved'""",
+            (reset_token,)
+        )
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({'error': 'Invalid or already-used reset token.'}), 404
+        req_id, username, token_expires = row
+        if token_expires and _datetime.datetime.utcnow() > token_expires:
+            db.close()
+            return jsonify({'error': 'Reset link expired. Please submit a new recovery request.'}), 410
+
+        new_pw_hash  = _hash_password(new_password)
+        new_pin_hash = _hash_password(new_pin) if new_pin else None
+        if new_pin_hash:
+            cur.execute("UPDATE admin_users SET password_hash=%s, pin_hash=%s WHERE username=%s",
+                        (new_pw_hash, new_pin_hash, username))
+        else:
+            cur.execute("UPDATE admin_users SET password_hash=%s WHERE username=%s",
+                        (new_pw_hash, username))
+
+        # Invalidate token — single use only
+        cur.execute(
+            "UPDATE admin_requests SET reset_token=NULL, reset_token_expires_at=NULL, updated_at=NOW() WHERE id=%s",
+            (req_id,)
+        )
+        db.commit(); db.close()
+        logger.info(f"Password reset successful for admin user '{username}'")
+        return jsonify({'success': True, 'message': 'Password updated! You can now log in.'})
+    except Exception as exc:
+        logger.error(f"admin_reset_password_submit error: {exc}", exc_info=True)
+        return jsonify({'error': f'Password reset failed: {str(exc)}'}), 500
+
 
 
 @app.route('/agent/login', methods=['GET', 'POST'])

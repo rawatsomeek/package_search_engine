@@ -9,8 +9,8 @@
         html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f7fa;min-height:100vh;overflow-x:hidden}
 
-{% if mode == 'login' %}
-        /* ===== LOGIN PAGE STYLES ===== */
+{% if mode == 'login' or mode == 'setup' or mode == 'forgot' or mode == 'reset_password' or mode == 'request_outcome' %}
+        /* ===== LOGIN / SETUP / FORGOT PAGE STYLES ===== */
         body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;min-height:100vh}
         .login-wrap{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:40px;width:100%;max-width:420px;margin:20px}
         .login-logo{text-align:center;margin-bottom:28px}
@@ -42,6 +42,39 @@
         .setup-link{text-align:center;margin-top:20px;font-size:13px;color:#888}
         .setup-link a{color:#667eea;font-weight:600;text-decoration:none}
         .setup-link a:hover{text-decoration:underline}
+
+        /* ===== SETUP / FORGOT / RESET / OUTCOME PAGE STYLES ===== */
+        .setup-wrap{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:40px;width:100%;max-width:500px;margin:20px}
+        .setup-logo{text-align:center;margin-bottom:28px}
+        .setup-logo h1{font-size:26px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .setup-logo p{color:#888;font-size:13px;margin-top:4px}
+        .setup-form .form-group{margin-bottom:14px}
+        .setup-form .form-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:5px}
+        .setup-form .form-group input{width:100%;padding:11px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;transition:.2s;-webkit-appearance:none}
+        .setup-form .form-group input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+        .setup-form .form-group .field-hint{font-size:11px;color:#aaa;margin-top:4px}
+        .setup-btn{width:100%;padding:13px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:.2s;margin-top:8px}
+        .setup-btn:hover{opacity:.9;transform:translateY(-1px)}
+        .setup-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+        .setup-err{background:#fff0f0;border:1px solid #ffd0d0;color:#c0392b;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;line-height:1.5}
+        .setup-err.show{display:block}
+        .setup-success{background:#f0fff4;border:1px solid #c3e6cb;color:#155724;padding:14px;border-radius:8px;font-size:14px;margin-bottom:14px;display:none;line-height:1.6}
+        .setup-success.show{display:block}
+        .setup-back{text-align:center;margin-top:16px;font-size:13px;color:#888}
+        .setup-back a{color:#667eea;font-weight:600;text-decoration:none}
+        .setup-back a:hover{text-decoration:underline}
+        .outcome-icon{font-size:56px;text-align:center;margin-bottom:16px}
+        .outcome-title{font-size:20px;font-weight:800;text-align:center;margin-bottom:12px}
+        .outcome-title.approved{color:#27ae60}
+        .outcome-title.rejected{color:#e74c3c}
+        .outcome-title.error{color:#e74c3c}
+        .outcome-title.already_done{color:#667eea}
+        .outcome-msg{font-size:14px;color:#555;text-align:center;line-height:1.7;margin-bottom:24px}
+        .outcome-actions{text-align:center}
+        .section-divider{border:none;border-top:1px solid #f0f0f0;margin:16px 0}
+        .form-row-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        @media(max-width:500px){.form-row-two{grid-template-columns:1fr}}
+
 {% else %}
         /* ===== HEADER ===== */
         .header{
@@ -392,6 +425,7 @@
 
     <div class="setup-link">
         First time? <a href="/admin/setup-page" id="setupLink">Set up admin account</a>
+        &nbsp;·&nbsp; <a href="/admin/forgot">Forgot password / username?</a>
     </div>
 </div>
 
@@ -633,6 +667,395 @@ function bytesToBase64url(bytes) {
 // Auto-focus first input
 document.querySelector('#pw-username').focus();
 </script>
+
+{% elif mode == 'setup' %}
+<!-- ============================================================
+     SETUP PAGE — Request Admin Access
+     Publicly accessible. Sends request to owner for approval.
+     No admin account is created until rawatsomeek@gmail.com approves.
+     ============================================================ -->
+<div class="setup-wrap">
+    <div class="setup-logo">
+        <h1>Global Calc</h1>
+        <p>Request Admin Access</p>
+    </div>
+
+    <div id="setupErr" class="setup-err"></div>
+    <div id="setupSuccess" class="setup-success"></div>
+
+    <div id="setupFormWrap" class="setup-form">
+        <div class="form-row-two">
+            <div class="form-group">
+                <label for="s-fname">Full Name <span style="color:#e74c3c">*</span></label>
+                <input type="text" id="s-fname" placeholder="John Doe" autocomplete="name" />
+            </div>
+            <div class="form-group">
+                <label for="s-company">Company / Organisation</label>
+                <input type="text" id="s-company" placeholder="AKS Hospitality" />
+            </div>
+        </div>
+        <div class="form-row-two">
+            <div class="form-group">
+                <label for="s-email">Email Address <span style="color:#e74c3c">*</span></label>
+                <input type="email" id="s-email" placeholder="you@company.com" autocomplete="email" />
+                <div class="field-hint">You'll receive approval notifications here.</div>
+            </div>
+            <div class="form-group">
+                <label for="s-phone">Phone Number</label>
+                <input type="tel" id="s-phone" placeholder="+91 98765 43210" autocomplete="tel" />
+            </div>
+        </div>
+        <hr class="section-divider">
+        <div class="form-group">
+            <label for="s-username">Desired Username <span style="color:#e74c3c">*</span></label>
+            <input type="text" id="s-username" placeholder="admin" autocomplete="username"
+                   oninput="this.value=this.value.replace(/[^a-zA-Z0-9_.\-]/g,'')" />
+            <div class="field-hint">Letters, numbers, underscores, dots, hyphens only.</div>
+        </div>
+        <div class="form-group">
+            <label for="s-password">Password <span style="color:#e74c3c">*</span></label>
+            <input type="password" id="s-password" placeholder="Minimum 8 characters" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+            <label for="s-pin">PIN (Optional — 4 to 6 digits)</label>
+            <input type="password" id="s-pin" placeholder="e.g. 1234" inputmode="numeric"
+                   maxlength="6" autocomplete="off" />
+            <div class="field-hint">Optional: set a short PIN for quick login.</div>
+        </div>
+
+        <button class="setup-btn" id="setupSubmitBtn" onclick="submitSetupRequest()">
+            📩 Request Access
+        </button>
+    </div>
+
+    <div class="setup-back">
+        Already have an account? <a href="/admin/login">Sign in</a>
+    </div>
+</div>
+
+<script>
+async function submitSetupRequest() {
+    const errEl = document.getElementById('setupErr');
+    const sucEl = document.getElementById('setupSuccess');
+    const btn   = document.getElementById('setupSubmitBtn');
+
+    errEl.classList.remove('show');
+    sucEl.classList.remove('show');
+
+    const full_name = document.getElementById('s-fname').value.trim();
+    const company   = document.getElementById('s-company').value.trim();
+    const email     = document.getElementById('s-email').value.trim();
+    const phone     = document.getElementById('s-phone').value.trim();
+    const username  = document.getElementById('s-username').value.trim();
+    const password  = document.getElementById('s-password').value;
+    const pin       = document.getElementById('s-pin').value.trim();
+
+    // Basic client-side validation
+    if (!full_name) { showSetupErr('Full name is required.'); return; }
+    if (!email || !email.includes('@')) { showSetupErr('A valid email address is required.'); return; }
+    if (!username) { showSetupErr('Username is required.'); return; }
+    if (!password || password.length < 8) { showSetupErr('Password must be at least 8 characters.'); return; }
+    if (pin && !/^\d{4,6}$/.test(pin)) { showSetupErr('PIN must be 4-6 digits.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Submitting request…';
+
+    try {
+        const res = await fetch('/admin/request-access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ full_name, company, email, phone, username, password, pin })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById('setupFormWrap').style.display = 'none';
+            btn.style.display = 'none';
+            sucEl.innerHTML = (
+                '<strong>Request submitted successfully!</strong><br><br>' +
+                data.message + '<br><br>' +
+                '<a href="/admin/login" style="color:#155724;font-weight:700;">← Back to Login</a>'
+            );
+            sucEl.classList.add('show');
+        } else {
+            showSetupErr(data.error || 'Failed to submit request. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Request Access';
+        }
+    } catch (e) {
+        showSetupErr('Connection error. Please check your internet and try again.');
+        btn.disabled = false;
+        btn.textContent = 'Request Access';
+    }
+}
+
+function showSetupErr(msg) {
+    const el = document.getElementById('setupErr');
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const first = document.getElementById('s-fname');
+    if (first) first.focus();
+});
+</script>
+
+{% elif mode == 'forgot' %}
+<!-- ============================================================
+     FORGOT PASSWORD / USERNAME PAGE
+     ============================================================ -->
+<div class="setup-wrap">
+    <div class="setup-logo">
+        <h1>Global Calc</h1>
+        <p>Account Recovery</p>
+    </div>
+
+    <div id="forgotErr" class="setup-err"></div>
+    <div id="forgotSuccess" class="setup-success"></div>
+
+    <div id="forgotFormWrap" class="setup-form">
+        <p style="color:#555;font-size:14px;margin-bottom:20px;line-height:1.6;">
+            Fill in the form below. The system owner will review your request and
+            send you a password-reset link via email.
+        </p>
+
+        <div class="form-group">
+            <label>Recovery Type <span style="color:#e74c3c">*</span></label>
+            <select id="f-type" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;-webkit-appearance:none;appearance:none;">
+                <option value="forgot_password">Forgot Password</option>
+                <option value="forgot_username">Forgot Username</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="f-username">Username (if known)</label>
+            <input type="text" id="f-username" placeholder="Leave blank if you forgot your username" autocomplete="username" />
+        </div>
+
+        <div class="form-group">
+            <label for="f-email">Email Address <span style="color:#e74c3c">*</span></label>
+            <input type="email" id="f-email" placeholder="The email linked to your account" autocomplete="email" />
+            <div class="field-hint">You will receive a notification at this address.</div>
+        </div>
+
+        <button class="setup-btn" id="forgotSubmitBtn" onclick="submitForgotRequest()">
+            📩 Submit Recovery Request
+        </button>
+    </div>
+
+    <div class="setup-back">
+        Remembered your credentials? <a href="/admin/login">Sign in</a>
+        &nbsp;·&nbsp; <a href="/admin/setup-page">Request new account</a>
+    </div>
+</div>
+
+<script>
+async function submitForgotRequest() {
+    const errEl = document.getElementById('forgotErr');
+    const sucEl = document.getElementById('forgotSuccess');
+    const btn   = document.getElementById('forgotSubmitBtn');
+
+    errEl.classList.remove('show');
+    sucEl.classList.remove('show');
+
+    const recovery_type = document.getElementById('f-type').value;
+    const username = document.getElementById('f-username').value.trim();
+    const email    = document.getElementById('f-email').value.trim();
+
+    if (!email || !email.includes('@')) {
+        errEl.textContent = 'A valid email address is required.';
+        errEl.classList.add('show');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+        const res = await fetch('/admin/forgot-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recovery_type, username, email })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById('forgotFormWrap').style.display = 'none';
+            btn.style.display = 'none';
+            sucEl.innerHTML = (
+                '<strong>Recovery request submitted!</strong><br><br>' +
+                data.message + '<br><br>' +
+                '<a href="/admin/login" style="color:#155724;font-weight:700;">← Back to Login</a>'
+            );
+            sucEl.classList.add('show');
+        } else {
+            errEl.textContent = data.error || 'Failed to submit. Please try again.';
+            errEl.classList.add('show');
+            btn.disabled = false;
+            btn.textContent = 'Submit Recovery Request';
+        }
+    } catch (e) {
+        errEl.textContent = 'Connection error. Please try again.';
+        errEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Submit Recovery Request';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('f-email').focus();
+});
+</script>
+
+{% elif mode == 'reset_password' %}
+<!-- ============================================================
+     RESET PASSWORD PAGE
+     Only reachable via owner-approved email link containing a
+     valid, non-expired reset_token. URL manipulation is blocked
+     server-side before this page is rendered.
+     ============================================================ -->
+<div class="setup-wrap">
+    <div class="setup-logo">
+        <h1>Global Calc</h1>
+        <p>Set New Password</p>
+    </div>
+
+    <div id="resetErr" class="setup-err"></div>
+    <div id="resetSuccess" class="setup-success"></div>
+
+    <div id="resetFormWrap" class="setup-form">
+        <p style="color:#555;font-size:14px;margin-bottom:20px;line-height:1.6;">
+            Setting new password for account:
+            <strong style="color:#333;">{{ reset_username }}</strong>
+        </p>
+
+        <div class="form-group">
+            <label for="r-password">New Password <span style="color:#e74c3c">*</span></label>
+            <input type="password" id="r-password" placeholder="Minimum 8 characters"
+                   autocomplete="new-password" onkeydown="if(event.key==='Enter')submitReset()" />
+        </div>
+        <div class="form-group">
+            <label for="r-confirm">Confirm New Password <span style="color:#e74c3c">*</span></label>
+            <input type="password" id="r-confirm" placeholder="Repeat your new password"
+                   autocomplete="new-password" onkeydown="if(event.key==='Enter')submitReset()" />
+        </div>
+        <div class="form-group">
+            <label for="r-pin">New PIN (Optional — 4 to 6 digits)</label>
+            <input type="password" id="r-pin" placeholder="Leave blank to keep/remove PIN"
+                   inputmode="numeric" maxlength="6" autocomplete="off" />
+        </div>
+
+        <button class="setup-btn" id="resetSubmitBtn" onclick="submitReset()">
+            🔑 Update Password
+        </button>
+    </div>
+
+    <div class="setup-back">
+        <a href="/admin/login">← Back to Login</a>
+    </div>
+</div>
+
+<script>
+const RESET_TOKEN = '{{ reset_token }}';
+
+async function submitReset() {
+    const errEl = document.getElementById('resetErr');
+    const sucEl = document.getElementById('resetSuccess');
+    const btn   = document.getElementById('resetSubmitBtn');
+
+    errEl.classList.remove('show');
+    sucEl.classList.remove('show');
+
+    const password = document.getElementById('r-password').value;
+    const confirm  = document.getElementById('r-confirm').value;
+    const pin      = document.getElementById('r-pin').value.trim();
+
+    if (!password || password.length < 8) {
+        errEl.textContent = 'Password must be at least 8 characters.';
+        errEl.classList.add('show'); return;
+    }
+    if (password !== confirm) {
+        errEl.textContent = 'Passwords do not match.';
+        errEl.classList.add('show'); return;
+    }
+    if (pin && !/^\d{4,6}$/.test(pin)) {
+        errEl.textContent = 'PIN must be 4-6 digits if provided.';
+        errEl.classList.add('show'); return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Updating…';
+
+    try {
+        const res = await fetch(`/admin/reset-password/${RESET_TOKEN}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, pin })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById('resetFormWrap').style.display = 'none';
+            btn.style.display = 'none';
+            sucEl.innerHTML = (
+                '<strong>Password updated successfully!</strong><br><br>' +
+                'You can now log in with your new password.<br><br>' +
+                '<a href="/admin/login" style="color:#155724;font-weight:700;font-size:15px;">→ Go to Login</a>'
+            );
+            sucEl.classList.add('show');
+        } else {
+            errEl.textContent = data.error || 'Failed to update password.';
+            errEl.classList.add('show');
+            btn.disabled = false;
+            btn.textContent = 'Update Password';
+        }
+    } catch (e) {
+        errEl.textContent = 'Connection error. Please try again.';
+        errEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Update Password';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('r-password').focus();
+});
+</script>
+
+{% elif mode == 'request_outcome' %}
+<!-- ============================================================
+     REQUEST OUTCOME PAGE — Shown to owner after clicking approve/reject
+     Also shown for errors (invalid/expired tokens, etc.)
+     ============================================================ -->
+<div class="setup-wrap" style="max-width:480px;text-align:center;">
+    <div class="setup-logo">
+        <h1>Global Calc</h1>
+        <p>Admin Panel — Owner Action</p>
+    </div>
+
+    {% if outcome == 'approved' %}
+    <div class="outcome-icon">✅</div>
+    <div class="outcome-title approved">Request Approved</div>
+    {% elif outcome == 'rejected' %}
+    <div class="outcome-icon">❌</div>
+    <div class="outcome-title rejected">Request Rejected</div>
+    {% elif outcome == 'already_done' %}
+    <div class="outcome-icon">ℹ️</div>
+    <div class="outcome-title already_done">Already Processed</div>
+    {% else %}
+    <div class="outcome-icon">⚠️</div>
+    <div class="outcome-title error">Action Failed</div>
+    {% endif %}
+
+    <p class="outcome-msg">{{ outcome_message }}</p>
+
+    <div class="outcome-actions">
+        <a href="/admin/login" class="setup-btn" style="display:inline-block;text-decoration:none;padding:12px 28px;border-radius:8px;">
+            Go to Admin Login
+        </a>
+    </div>
+</div>
 
 {% else %}
 <!-- ============================================================

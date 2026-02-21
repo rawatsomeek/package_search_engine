@@ -411,6 +411,46 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 -- =====================================================
+-- ADMIN REQUESTS — Approval-based admin account creation & recovery
+-- =====================================================
+-- Every signup, forgot-password, or forgot-username request is stored here.
+-- The system owner (rawatsomeek@gmail.com) must approve before any action is taken.
+-- approve_token and reject_token are cryptographically random (UUID4 hex, 64 chars).
+-- reset_token is generated ONLY after owner approval of a recovery request.
+-- status: 'pending' → 'approved' | 'rejected' | 'expired'
+-- Tokens expire after 48 hours; reset_token expires after 2 hours.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS admin_requests (
+    id SERIAL PRIMARY KEY,
+    request_type VARCHAR(20) NOT NULL DEFAULT 'signup'
+        CHECK (request_type IN ('signup', 'forgot_password', 'forgot_username')),
+    username VARCHAR(100),                    -- desired username (signup) or existing (recovery)
+    password_hash VARCHAR(255),               -- bcrypt hash of requested password (signup only)
+    pin_hash VARCHAR(255),                    -- bcrypt hash of requested PIN (optional)
+    company VARCHAR(200),                     -- company / organisation name
+    email VARCHAR(200) NOT NULL,              -- requester's email (for notifications)
+    full_name VARCHAR(200),                   -- requester's full name
+    phone VARCHAR(30),                        -- requester's phone number
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'rejected', 'expired')),
+    approve_token VARCHAR(128) NOT NULL UNIQUE,   -- secret token for owner approve link
+    reject_token  VARCHAR(128) NOT NULL UNIQUE,   -- secret token for owner reject link
+    reset_token   VARCHAR(128) UNIQUE,             -- secret token sent to user after recovery approval
+    reset_token_expires_at TIMESTAMP,              -- expiry for reset_token (2 hours)
+    expires_at TIMESTAMP NOT NULL,                 -- token expiry for approve/reject (48 hours)
+    processed_at TIMESTAMP,                        -- when the owner approved/rejected
+    owner_note TEXT,                               -- optional rejection reason from owner
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_requests_approve_token ON admin_requests(approve_token);
+CREATE INDEX IF NOT EXISTS idx_admin_requests_reject_token  ON admin_requests(reject_token);
+CREATE INDEX IF NOT EXISTS idx_admin_requests_reset_token   ON admin_requests(reset_token) WHERE reset_token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_admin_requests_email         ON admin_requests(email);
+CREATE INDEX IF NOT EXISTS idx_admin_requests_status        ON admin_requests(status);
+
+-- =====================================================
 -- AI CHAT SESSIONS
 -- =====================================================
 CREATE TABLE IF NOT EXISTS ai_sessions (
