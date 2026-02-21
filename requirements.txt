@@ -25,7 +25,7 @@ jiter==0.13.0
 MarkupSafe==3.0.3
 openai==2.21.0
 packaging==26.0
-psycopg[binary]
+psycopg2-binary==2.9.9
 py-webauthn==0.0.4
 pycparser==3.0
 pydantic==2.12.5
