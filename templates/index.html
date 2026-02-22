@@ -320,22 +320,7 @@ header::after{
 #navBtnGroup.visible{display:flex}
 #navBtnGroup.hidden{display:flex}
 
-/* =====================================================
-   ADMIN BUTTON — always fixed top right, never beside back
-   ===================================================== */
-#adminPanelBtn{
-  position:fixed;top:0.875rem;right:0.875rem;z-index:1001;
-  padding:0.5rem 1rem;
-  border-radius:10px;
-  border:1px solid rgba(255,255,255,0.18);
-  background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  color:#fff;cursor:pointer;transition:var(--transition-smooth);
-  font-weight:600;font-size:0.78rem;min-height:var(--touch-min);
-  display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;
-}
-#adminPanelBtn:hover{background:rgba(102,126,234,0.3);border-color:rgba(102,126,234,0.5);}
 @media(max-width:480px){
-  #adminPanelBtn{top:0.625rem;right:0.625rem;padding:0.45rem 0.75rem;font-size:0.72rem;}
   #navBtnGroup{top:0.625rem;left:0.625rem;}
   #backBtn{padding:0.45rem 0.75rem;font-size:0.9rem;}
 }
@@ -923,9 +908,6 @@ header::after{
   <button id="backBtn" onclick="goBack()" title="Go Back">←</button>
 </div>
 
-<!-- Admin Button (top-right, independent of back button) -->
-<a href="/admin" id="adminPanelBtn" title="Admin Panel">⚙ Admin</a>
-
 <!-- sidebarToggle kept hidden for JS compat -->
 <button id="sidebarToggle" style="display:none !important;" aria-hidden="true">📋 Trip Summary</button>
 
@@ -1163,7 +1145,7 @@ header::after{
 
 <!-- Language Selector -->
 <div id="langSelectorBar">
-  <select id="langSelect" onchange="changeLanguage(this.value)" title="Select language">
+  <select id="langSelect" onchange="syncMobileLang(this.value)" title="Select language">
     <option value="en-IN">🇮🇳 English</option>
     <option value="hi-IN">🇮🇳 हिन्दी</option>
     <option value="mr-IN">🇮🇳 मराठी</option>
@@ -1696,6 +1678,8 @@ const messages=document.getElementById("messages");
 const optionsContainer=document.getElementById("optionsContainer");
 function scrollToBottom(){requestAnimationFrame(()=>{requestAnimationFrame(()=>{messages.scrollTop=messages.scrollHeight;});});}
 function addBot(msg){
+    // During language switch re-render, skip adding bot messages to avoid duplicates
+    if(window._langSwitchRerender) return;
     const d=document.createElement('div');
     d.className='botMessage';
     // Rich inline formatting: **bold**, *italic*, bullet lines, --- hr
@@ -1723,8 +1707,7 @@ function removeTypingIndicator(){const t=document.getElementById('typingIndicato
 function updateNavButtons(){
     const navGroup = document.getElementById('navBtnGroup');
     const backBtn = document.getElementById('backBtn');
-    const adminBtn = document.getElementById('adminPanelBtn');
-    // Always show navBtnGroup (it contains the admin button)
+    // Always show navBtnGroup
     navGroup.classList.remove('hidden');
     navGroup.classList.add('visible');
     // Back button only visible when there's history
@@ -1788,13 +1771,13 @@ function renderStep(){
         case STEPS.CAB:checkIfCabRequired().then(()=>{if(window.cabRequired){renderCab();}else{currentStep=STEPS.ADDONS;renderStep();}});break;
         case STEPS.ADDONS:
             if(hotelSource === 'live'){
-                addBot("Add-ons are not available when booking live hotels. Proceeding to price calculation...");
+            addBot(T('no_addons_live'));
                 setTimeout(()=>submitData(), 800);
             } else {
                 renderAddons();
             }
             break;
-        default:addBot("Flow completed!");break;
+        default:addBot(T('flow_completed'));break;
     }
 }
 
@@ -1807,15 +1790,15 @@ function autoAdvance(value,nextStep=null){
     setTimeout(()=>renderStep(),300);
 }
 
-function renderWelcome(){addBot("Hi, I am Sharad, your AI-powered package advisor. Let's create your perfect trip!");setTimeout(()=>{stepHistory.push(currentStep);currentStep=STEPS.REGION_TYPE;updateNavButtons();renderStep();},1000);}
+function renderWelcome(){addBot(T('welcome_msg'));setTimeout(()=>{stepHistory.push(currentStep);currentStep=STEPS.REGION_TYPE;updateNavButtons();renderStep();},1000);}
 
-function renderRegionType(){addBot("Are you planning a domestic or international trip?");
-    ["Domestic","International"].forEach(t=>{const b=document.createElement("button");b.className="optionButton";b.innerText=t;b.onclick=()=>{selectedRegionType=t==="Domestic"?"DOMESTIC":"INTERNATIONAL";autoAdvance(t);};optionsContainer.appendChild(b);});}
+function renderRegionType(){addBot(T('ask_region_type'));
+    [{label:T('opt_domestic'),val:"DOMESTIC"},{label:T('opt_international'),val:"INTERNATIONAL"}].forEach(({label,val})=>{const b=document.createElement("button");b.className="optionButton";b.innerText=label;b.onclick=()=>{selectedRegionType=val;autoAdvance(label);};optionsContainer.appendChild(b);});}
 
 function renderDestination(){
-    addBot("Select your destination:");
+    addBot(T('ask_destination'));
     const filtered=getFilteredRegions();
-    if(!filtered.length){addBot("No destinations available for this selection. Please go back and choose a different option.");return;}
+    if(!filtered.length){addBot(T('no_destinations'));return;}
     filtered.forEach(r=>{
         const b=document.createElement("button");b.className="optionButton";b.innerText=r.name;
         b.onclick=()=>{
@@ -1829,19 +1812,19 @@ function renderDestination(){
     });
 }
 
-function renderSeason(){addBot("Season or Off Season?");
-    [["Season","ON","Peak Season"],["Off Season","OFF","Off Season"]].forEach(([label,val,display])=>{const b=document.createElement("button");b.className="optionButton";b.innerText=label;b.onclick=()=>{selectedSeason=val;autoAdvance(display);};optionsContainer.appendChild(b);});}
+function renderSeason(){addBot(T('ask_season'));
+    [[T('opt_season'),"ON","Peak Season"],[T('opt_off_season'),"OFF","Off Season"]].forEach(([label,val,display])=>{const b=document.createElement("button");b.className="optionButton";b.innerText=label;b.onclick=()=>{selectedSeason=val;autoAdvance(label);};optionsContainer.appendChild(b);});}
 
 /* ============================================================
    TRAVELERS STEP
    ============================================================ */
 function renderTravelers(){
-    addBot("How many travelers will be joining the trip?");
+    addBot(T('ask_travelers'));
     const container = document.createElement('div');
     container.className = 'counterSelectorContainer';
     const rows = [
-        {label:'Adults',key:'adults',min:1,max:20,val:selectedAdults},
-        {label:'Children',key:'children',min:0,max:10,val:selectedChildren}
+        {label:T('lbl_adults'),key:'adults',min:1,max:20,val:selectedAdults},
+        {label:T('lbl_children'),key:'children',min:0,max:10,val:selectedChildren}
     ];
     rows.forEach(({label,key,min,max,val})=>{
         const row=document.createElement('div');row.className='counterRow';
@@ -1860,7 +1843,7 @@ function renderTravelers(){
     confirmBtn.className='optionButton';
     confirmBtn.style.marginTop='1rem';
     confirmBtn.style.width='100%';
-    confirmBtn.textContent='Confirm Travelers →';
+    confirmBtn.textContent=T('btn_confirm_travelers');
     confirmBtn.onclick=()=>{
         selectedAdults=parseInt(document.getElementById('counter_adults').textContent);
         selectedChildren=parseInt(document.getElementById('counter_children').textContent);
@@ -1874,14 +1857,14 @@ function renderTravelers(){
    STAY EXPERIENCE STEP
    ============================================================ */
 function renderStayExperience(){
-    addBot("How many nights? And how would you like to choose your accommodation?");
+    addBot(T('ask_stay'));
     const dualContainer = document.createElement('div');
     dualContainer.className = 'dualSelectorContainer';
     const nightsCol = document.createElement('div');
     nightsCol.className = 'selectorColumn';
     const nightsLabel = document.createElement('span');
     nightsLabel.className = 'selectorLabel';
-    nightsLabel.textContent = '🌙 Nights';
+    nightsLabel.textContent = T('lbl_nights');
     const nightsScroll = document.createElement('div');
     nightsScroll.className = 'horizontalScroll';
     for(let i=1;i<=14;i++){
@@ -1903,7 +1886,7 @@ function renderStayExperience(){
     sigCol.className = 'selectorColumn';
     const sigLabel = document.createElement('span');
     sigLabel.className = 'selectorLabel';
-    sigLabel.textContent = '🗺️ Sightseeing Days';
+    sigLabel.textContent = T('lbl_sightseeing_days');
     const sigScroll = document.createElement('div');
     sigScroll.className = 'horizontalScroll';
     for(let i=0;i<=10;i++){
@@ -1941,12 +1924,12 @@ function renderStayExperience(){
     sourceContainer.className = 'hotelSourceContainer';
     const sourceLabel = document.createElement('span');
     sourceLabel.className = 'hotelSourceLabel';
-    sourceLabel.textContent = '🏨 Accommodation Source';
+    sourceLabel.textContent = T('lbl_accommodation_source');
     const sourceBtns = document.createElement('div');
     sourceBtns.className = 'hotelSourceBtns';
     const adminBtn = document.createElement('button');
     adminBtn.className = 'hotelSourceBtn' + (hotelSource==='admin'?' active':'');
-    adminBtn.innerHTML = '<span class="btn-icon">🗄️</span> Our Hotels';
+    adminBtn.innerHTML = T('btn_our_hotels');
     adminBtn.onclick = () => {
         if(hotelSource !== 'admin'){
             hotelSource = 'admin';
@@ -1959,7 +1942,7 @@ function renderStayExperience(){
     };
     const liveBtn = document.createElement('button');
     liveBtn.className = 'hotelSourceBtn' + (hotelSource==='live'?' active':'');
-    liveBtn.innerHTML = '<span class="btn-icon">🌐</span> Live Hotels (Amadeus)';
+    liveBtn.innerHTML = T('btn_live_hotels');
     liveBtn.onclick = () => {
         if(hotelSource !== 'live'){
             hotelSource = 'live';
@@ -1987,7 +1970,7 @@ function renderStayExperience(){
     const hotelSelect = document.createElement('select');
     hotelSelect.className = 'hotelSelect';
     const nullOpt = document.createElement('option');
-    nullOpt.value='';nullOpt.textContent='— Select Hotel (optional) —';
+    nullOpt.value='';nullOpt.textContent=T('opt_select_hotel_optional');
     hotelSelect.appendChild(nullOpt);
     getFilteredHotels().forEach(h=>{
         const o=document.createElement('option');
@@ -2002,22 +1985,22 @@ function renderStayExperience(){
 
     const sigConfigLabel = document.createElement('div');
     sigConfigLabel.style.cssText = 'margin-top:1.5rem;font-weight:600;font-size:0.9rem;margin-bottom:0.75rem;color:rgba(255,255,255,0.8)';
-    sigConfigLabel.textContent = '📍 Sightseeing Configuration';
+    sigConfigLabel.textContent = T('lbl_sightseeing_config');
     optionsContainer.appendChild(sigConfigLabel);
     renderSightseeingSelections(optionsContainer);
 
     const confirmBtn=document.createElement('button');
     confirmBtn.className='optionButton';
     confirmBtn.style.cssText='margin-top:1.5rem;width:100%;padding:1rem;font-size:1rem;font-weight:700';
-    confirmBtn.textContent='Confirm Stay & Continue →';
+    confirmBtn.textContent=T('btn_confirm_stay');
     confirmBtn.onclick=()=>{
         const activeNight=nightsScroll.querySelector('.magnifyOption.active');
         if(activeNight) selectedNights=parseInt(activeNight.dataset.val);
         const activeSig=sigScroll.querySelector('.magnifyOption.active');
         if(activeSig) selectedSightseeingDays=parseInt(activeSig.dataset.val);
-        if(selectedNights<=0){addBot("Please select at least 1 night.");return;}
+        if(selectedNights<=0){addBot(T('err_select_nights'));return;}
         if(hotelSource==='live' && !liveHotelState.selectedOffer){
-            addBot("You selected Live Hotels mode. Please search and select a hotel first.");
+            addBot(T('err_select_live_hotel'));
             openLiveHotelModal();
             return;
         }
@@ -2061,7 +2044,7 @@ function renderKasolSharing(parentEl){
     kasolContainer.className = 'kasolSharingContainer';
     const lbl = document.createElement('span');
     lbl.className = 'kasolSharingLabel';
-    lbl.textContent = 'Sharing Type for Kasol Hotel:';
+    lbl.textContent = T('lbl_kasol_sharing');
     const btns = document.createElement('div');
     btns.className = 'kasolSharingButtons';
     ['DOUBLE','TRIPLE','QUAD'].forEach(type=>{
@@ -2093,7 +2076,7 @@ function renderSightseeingSelections(parentEl, replace=false){
     if(!filteredDests.length && selectedSightseeingDays>0){
         const noDestMsg = document.createElement('div');
         noDestMsg.style.cssText='color:rgba(255,255,255,0.5);font-size:0.875rem;padding:0.75rem;text-align:center';
-        noDestMsg.textContent='No destinations available for this region.';
+        noDestMsg.textContent=T('no_destinations');
         container.appendChild(noDestMsg);
         parentEl.appendChild(container);
         return;
@@ -2110,10 +2093,10 @@ function renderSightseeingSelections(parentEl, replace=false){
         rowInner.className = 'sightseeingRow';
         const lbl = document.createElement('span');
         lbl.className = 'dayLabel';
-        lbl.textContent = `Day ${i+1}`;
+        lbl.textContent = `${T('lbl_day')} ${i+1}`;
         const sel = document.createElement('select');
         const naOpt = document.createElement('option');
-        naOpt.value='N/A';naOpt.textContent='— No Sightseeing —';
+        naOpt.value='N/A';naOpt.textContent=T('opt_no_sightseeing');
         sel.appendChild(naOpt);
         filteredDests.forEach(d=>{
             const o=document.createElement('option');
@@ -2127,7 +2110,7 @@ function renderSightseeingSelections(parentEl, replace=false){
         if(hotelSource==='admin'){
             const hotelBtn = document.createElement('button');
             hotelBtn.className = 'addHotelBtn';
-            hotelBtn.textContent = perNightHotels[i]?'🏨 Change Hotel':'+ Night Hotel';
+            hotelBtn.textContent = perNightHotels[i]?T('btn_change_hotel'):T('btn_add_night_hotel');
             hotelBtn.onclick=()=>{
                 const pnContainer = row.querySelector('.perNightHotelContainer');
                 if(pnContainer){pnContainer.style.display=pnContainer.style.display==='none'?'block':'none';}
@@ -2146,12 +2129,12 @@ function renderPerNightHotelPicker(parentRow, nightIdx, triggerBtn){
     pnContainer.className = 'perNightHotelContainer';
     const lbl = document.createElement('div');
     lbl.className = 'perNightHotelLabel';
-    lbl.textContent = `Hotel for Night ${nightIdx+1}:`;
+    lbl.textContent = `${T('lbl_hotel_for_night')} ${nightIdx+1}:`;
     const sel = document.createElement('select');
     sel.className = 'hotelSelect';
     sel.style.marginTop='0.5rem';
     const defOpt = document.createElement('option');
-    defOpt.value='';defOpt.textContent='— Use Default Hotel —';
+    defOpt.value='';defOpt.textContent=T('opt_use_default_hotel');
     sel.appendChild(defOpt);
     getFilteredHotels().forEach(h=>{
         const o=document.createElement('option');
@@ -2162,7 +2145,7 @@ function renderPerNightHotelPicker(parentRow, nightIdx, triggerBtn){
     sel.onchange=()=>{
         if(sel.value) perNightHotels[nightIdx]=sel.value;
         else delete perNightHotels[nightIdx];
-        triggerBtn.textContent=perNightHotels[nightIdx]?'🏨 Change Hotel':'+ Night Hotel';
+        triggerBtn.textContent=perNightHotels[nightIdx]?T('btn_change_hotel'):T('btn_add_night_hotel');
         updateSummary();
     };
     pnContainer.append(lbl,sel);
@@ -2173,14 +2156,14 @@ function renderPerNightHotelPicker(parentRow, nightIdx, triggerBtn){
    ROOMS STEP
    ============================================================ */
 function renderRooms(){
-    addBot("How many rooms do you need? (We can auto-calculate based on your group size.)");
+    addBot(T('ask_rooms'));
     const container = document.createElement('div');
     container.className = 'counterSelectorContainer';
     const row = document.createElement('div');
     row.className = 'counterRow';
     const lbl = document.createElement('span');
     lbl.className = 'counterLabel';
-    lbl.textContent = 'Rooms (0 = auto)';
+    lbl.textContent = T('lbl_rooms_auto');
     const controls = document.createElement('div');
     controls.className = 'counterControls';
     const minusBtn = document.createElement('button');
@@ -2200,12 +2183,12 @@ function renderRooms(){
     container.appendChild(row);
     const autoNote = document.createElement('div');
     autoNote.style.cssText='font-size:0.8rem;color:rgba(255,255,255,0.5);margin-top:0.5rem;text-align:center';
-    autoNote.textContent='Set to 0 to auto-calculate based on travelers and sharing type';
+    autoNote.textContent=T('note_rooms_auto');
     container.appendChild(autoNote);
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'optionButton';
     confirmBtn.style.cssText = 'margin-top:1rem;width:100%';
-    confirmBtn.textContent = 'Confirm Rooms →';
+    confirmBtn.textContent = T('btn_confirm_rooms');
     confirmBtn.onclick=()=>{
         selectedRooms=parseInt(document.getElementById('counter_rooms').textContent);
         autoAdvance(selectedRooms===0?'Auto rooms':''+selectedRooms+' room'+(selectedRooms!==1?'s':''));
@@ -2217,9 +2200,9 @@ function renderRooms(){
    TRANSPORT STEP
    ============================================================ */
 function renderTransport(){
-    addBot("Choose your transport option:");
+    addBot(T('ask_transport'));
     const filtered = getFilteredTransports();
-    if(!filtered.length){addBot("No transport options available. Please go back.");return;}
+    if(!filtered.length){addBot(T('no_transport'));return;}
 
     // Transport options
     filtered.forEach(t=>{
@@ -2247,13 +2230,13 @@ function renderTransport(){
    FLIGHT SECTION
    ============================================================ */
 function renderFlightSection(container){
-    addBot("Great! Please configure your flight details:");
+    addBot(T('ask_flight'));
     const typeContainer = document.createElement('div');
     typeContainer.className = 'flightTypeContainer';
     ['none','one_way','return'].forEach(mode=>{
         const b=document.createElement('button');
         b.className='flightTypeBtn'+(flightState.mode===mode?' active':'');
-        b.textContent = mode==='none'?'No Flight':mode==='one_way'?'One Way':'Return';
+        b.textContent = mode==='none'?T('opt_no_flight'):mode==='one_way'?T('opt_one_way'):T('opt_return');
         b.onclick=()=>{
             flightState.mode=mode;
             typeContainer.querySelectorAll('.flightTypeBtn').forEach(x=>x.classList.remove('active'));
@@ -2272,7 +2255,7 @@ function renderFlightSection(container){
     const skipBtn=document.createElement('button');
     skipBtn.className='optionButton';
     skipBtn.style.cssText='margin-top:1rem;width:100%';
-    skipBtn.textContent=flightState.selectedOffer?'Continue with Selected Flight →':'Skip Flight & Continue →';
+    skipBtn.textContent=flightState.selectedOffer?T('btn_continue_flight'):T('btn_skip_flight');
     skipBtn.onclick=()=>{
         autoAdvance(flightState.selectedOffer?`Flight: ${flightState.selectedOffer.airline} - ${formatCurrency(flightState.selectedOffer.price)}`:'No flight selected');
     };
@@ -2603,10 +2586,10 @@ function renderCab(){
    ADDONS STEP
    ============================================================ */
 function renderAddons(){
-    addBot("Any add-ons for your trip? (Select all that apply)");
+    addBot(T('ask_addons'));
     const filtered = getFilteredAddons();
     if(!filtered.length){
-        addBot("No add-ons available for this region. Proceeding to price calculation...");
+        addBot(T('no_addons'));
         setTimeout(()=>submitData(),500);
         return;
     }
@@ -2628,7 +2611,7 @@ function renderAddons(){
     const confirmBtn=document.createElement('button');
     confirmBtn.className='optionButton';
     confirmBtn.style.cssText='margin-top:1.5rem;width:100%;padding:1rem;font-weight:700;font-size:1rem';
-    confirmBtn.textContent='Get My Price Quote →';
+    confirmBtn.textContent=T('btn_get_quote');
     confirmBtn.onclick=()=>{
         const selected=selectedAddons.map(k=>{const a=allAddons.find(x=>x.internal_name===k);return a?a.name:k;});
         addUser(selected.length?`Add-ons: ${selected.join(', ')}`:'No add-ons selected');
@@ -3424,15 +3407,15 @@ function showBookingErr(msg) {
 function renderModifyOptions(){
     optionsContainer.innerHTML='';
     const options=[
-        {label:'Change Hotel',action:()=>{
+        {label:T('opt_change_hotel'),action:()=>{
             if(hotelSource==='live') openLiveHotelModal();
             else{currentStep=STEPS.STAY_EXPERIENCE;stepHistory.push(currentStep);updateNavButtons();renderStep();}
         }},
-        {label:'Change Transport',action:()=>{currentStep=STEPS.TRANSPORT;stepHistory.push(currentStep);updateNavButtons();renderStep();}},
-        {label:'Modify Travelers',action:()=>{currentStep=STEPS.TRAVELERS;stepHistory.push(currentStep);updateNavButtons();renderStep();}},
-        {label:'Recalculate',action:()=>submitData()},
-        {label:'📋 Book Package',action:()=>openBookingModal()},
-        {label:'Start Over',action:()=>startOver()},
+        {label:T('opt_change_transport'),action:()=>{currentStep=STEPS.TRANSPORT;stepHistory.push(currentStep);updateNavButtons();renderStep();}},
+        {label:T('opt_modify_travelers'),action:()=>{currentStep=STEPS.TRAVELERS;stepHistory.push(currentStep);updateNavButtons();renderStep();}},
+        {label:T('opt_recalculate'),action:()=>submitData()},
+        {label:T('opt_book_package'),action:()=>openBookingModal()},
+        {label:T('opt_start_over'),action:()=>startOver()},
     ];
     options.forEach(({label,action})=>{
         const b=document.createElement('button');b.className='optionButton';b.textContent=label;
@@ -3787,7 +3770,7 @@ function toggleVoiceInput(){
         if(btn){btn.classList.remove('listening');}
         const statusEl=document.getElementById('voiceStatus');
         if(statusEl){statusEl.style.opacity='0';}
-        addBot("Voice input error. Please try again.");
+        addBot(T('voice_error'));
     };
     recognition.onend=()=>{
         isListening=false;
@@ -3809,7 +3792,9 @@ window.addEventListener('DOMContentLoaded', async()=>{
 });
 
 /* ============================================================
-   MULTI-LANGUAGE SUPPORT
+   COMPREHENSIVE MULTI-LANGUAGE SUPPORT
+   Single source of truth for ALL UI text. pricing_engine.py
+   remains language-independent. Only display layer changes.
    ============================================================ */
 window.selectedLanguageCode = 'en-IN';
 window.selectedLanguageName = 'English';
@@ -3830,132 +3815,664 @@ const LANGUAGE_NAMES = {
   'ru':    'Russian',
 };
 
-// UI text translations for static UI elements
-const UI_TRANSLATIONS = {
-  'en-IN': {
-    placeholder: 'Ask me anything about your trip...',
-    send: 'Send',
-    tripSummary: '📋 Trip Summary',
-    waiting: 'Waiting for inputs…',
-    complete: 'Complete the steps to see your price quote.',
-    aiInput: 'Ask me anything about your trip...',
+/* ----------------------------------------------------------
+   CENTRALIZED TRANSLATION DICTIONARY
+   Keys are semantic identifiers, values are per-language strings.
+   Add new keys here whenever a new UI string needs translation.
+   ---------------------------------------------------------- */
+const TRANSLATIONS = {
+  /* ── AI greeting / welcome ── */
+  welcome_msg: {
+    'en-IN': "Hi, I am Sharad, your AI-powered package advisor. Let's create your perfect trip!",
+    'hi-IN': "नमस्ते, मैं शरद हूँ, आपका AI पैकेज सलाहकार। आइए आपकी परफेक्ट यात्रा बनाते हैं!",
+    'mr-IN': "नमस्कार, मी शरद आहे, तुमचा AI पॅकेज सल्लागार. चला तुमची परफेक्ट सहल बनवूया!",
+    'gu-IN': "નમસ્તે, હું શરદ છું, તમારો AI પૅકેજ સલાહકાર. ચાલો તમારી સંપૂર્ણ યાત્રા બનાવીએ!",
+    'ta-IN': "வணக்கம், நான் சரத், உங்கள் AI பயண ஆலோசகர். உங்கள் சிறந்த பயணத்தை உருவாக்குவோம்!",
+    'te-IN': "నమస్కారం, నేను శరద్, మీ AI ప్యాకేజీ సలహాదారుడిని. మీ అద్భుతమైన యాత్రను రూపొందిద్దాం!",
+    'kn-IN': "ನಮಸ್ಕಾರ, ನಾನು ಶರದ್, ನಿಮ್ಮ AI ಪ್ಯಾಕೇಜ್ ಸಲಹೆಗಾರ. ನಿಮ್ಮ ಪರಿಪೂರ್ಣ ಪ್ರವಾಸ ರೂಪಿಸೋಣ!",
+    'bn-IN': "নমস্কার, আমি শরদ, আপনার AI প্যাকেজ পরামর্শদাতা। আসুন আপনার নিখুঁত ভ্রমণ তৈরি করি!",
+    'ar':    "مرحباً، أنا شرد، مستشارك في باقات السفر بالذكاء الاصطناعي. لنُنشئ رحلتك المثالية!",
+    'zh-CN': "您好，我是Sharad，您的AI旅行套餐顾问。让我们为您打造完美旅程！",
+    'fr':    "Bonjour, je suis Sharad, votre conseiller en voyages IA. Créons votre voyage parfait !",
+    'de':    "Hallo, ich bin Sharad, Ihr KI-Reiseberater. Lassen Sie uns Ihre perfekte Reise planen!",
+    'ru':    "Привет, я Шарад, ваш AI-консультант по турпакетам. Давайте создадим ваше идеальное путешествие!",
   },
-  'hi-IN': {
-    placeholder: 'अपनी यात्रा के बारे में पूछें...',
-    send: 'भेजें',
-    tripSummary: '📋 यात्रा सारांश',
-    waiting: 'इनपुट का इंतज़ार...',
-    complete: 'मूल्य जानने के लिए सभी चरण पूरे करें।',
-    aiInput: 'अपनी यात्रा के बारे में पूछें...',
+  /* ── Region type step ── */
+  ask_region_type: {
+    'en-IN': "Are you planning a domestic or international trip?",
+    'hi-IN': "क्या आप घरेलू या अंतर्राष्ट्रीय यात्रा की योजना बना रहे हैं?",
+    'mr-IN': "तुम्ही देशांतर्गत की आंतरराष्ट्रीय प्रवास नियोजित केला आहे?",
+    'gu-IN': "શું તમે ઘરેલું કે આંતરરાષ્ટ્રીય પ્રવાસ આયોજન કરી રહ્યા છો?",
+    'ta-IN': "நீங்கள் உள்நாட்டு அல்லது சர்வதேச பயணம் திட்டமிடுகிறீர்களா?",
+    'te-IN': "మీరు దేశీయ లేదా అంతర్జాతీయ ప్రయాణం ప్లాన్ చేస్తున్నారా?",
+    'kn-IN': "ನೀವು ದೇಶೀಯ ಅಥವಾ ಅಂತಾರಾಷ್ಟ್ರೀಯ ಪ್ರವಾಸ ಯೋಜಿಸುತ್ತಿದ್ದೀರಾ?",
+    'bn-IN': "আপনি কি দেশীয় নাকি আন্তর্জাতিক ভ্রমণ পরিকল্পনা করছেন?",
+    'ar':    "هل تخطط لرحلة محلية أم دولية؟",
+    'zh-CN': "您计划国内游还是国际游？",
+    'fr':    "Planifiez-vous un voyage national ou international ?",
+    'de':    "Planen Sie eine Inlands- oder Auslandsreise?",
+    'ru':    "Вы планируете внутренний или международный тур?",
   },
-  'mr-IN': {
-    placeholder: 'तुमच्या सहलीबद्दल विचारा...',
-    send: 'पाठवा',
-    tripSummary: '📋 सहल सारांश',
-    waiting: 'इनपुटची वाट पाहत...',
-    complete: 'किंमत पाहण्यासाठी सर्व टप्पे पूर्ण करा.',
-    aiInput: 'तुमच्या सहलीबद्दल विचारा...',
+  opt_domestic: {
+    'en-IN': "Domestic", 'hi-IN': "घरेलू", 'mr-IN': "देशांतर्गत", 'gu-IN': "ઘરેલું",
+    'ta-IN': "உள்நாட்டு", 'te-IN': "దేశీయ", 'kn-IN': "ದೇಶೀಯ", 'bn-IN': "দেশীয়",
+    'ar': "داخلي", 'zh-CN': "国内", 'fr': "National", 'de': "Inland", 'ru': "Внутренний",
   },
-  'gu-IN': {
-    placeholder: 'તમારી યાત્રા વિશે પૂછો...',
-    send: 'મોકલો',
-    tripSummary: '📋 યાત્રા સારાંશ',
-    waiting: 'ઇનપુટ માટે રાહ જોઈ...',
-    complete: 'કિંમત જાણવા બધાં પગલાં પૂરા કરો.',
-    aiInput: 'તમારી યાત્રા વિશે પૂછો...',
+  opt_international: {
+    'en-IN': "International", 'hi-IN': "अंतर्राष्ट्रीय", 'mr-IN': "आंतरराष्ट्रीय", 'gu-IN': "આંતરરાષ્ટ્રીય",
+    'ta-IN': "சர்வதேச", 'te-IN': "అంతర్జాతీయ", 'kn-IN': "ಅಂತಾರಾಷ್ಟ್ರೀಯ", 'bn-IN': "আন্তর্জাতিক",
+    'ar': "دولي", 'zh-CN': "国际", 'fr': "International", 'de': "International", 'ru': "Международный",
   },
-  'ta-IN': {
-    placeholder: 'உங்கள் பயணத்தைப் பற்றி கேளுங்கள்...',
-    send: 'அனுப்பு',
-    tripSummary: '📋 பயண சுருக்கம்',
-    waiting: 'உள்ளீடுகளுக்காக காத்திருக்கிறது...',
-    complete: 'விலை காண அனைத்து படிகளையும் முடிக்கவும்.',
-    aiInput: 'உங்கள் பயணத்தைப் பற்றி கேளுங்கள்...',
+  /* ── Destination step ── */
+  ask_destination: {
+    'en-IN': "Select your destination:",
+    'hi-IN': "अपना गंतव्य चुनें:",
+    'mr-IN': "तुमचे गंतव्य निवडा:",
+    'gu-IN': "તમારું ગંતવ્ય પસંદ કરો:",
+    'ta-IN': "உங்கள் இலக்கை தேர்ந்தெடுக்கவும்:",
+    'te-IN': "మీ గమ్యస్థానాన్ని ఎంచుకోండి:",
+    'kn-IN': "ನಿಮ್ಮ ಗಮ್ಯಸ್ಥಾನ ಆಯ್ಕೆ ಮಾಡಿ:",
+    'bn-IN': "আপনার গন্তব্য নির্বাচন করুন:",
+    'ar': "اختر وجهتك:",
+    'zh-CN': "选择您的目的地：",
+    'fr': "Sélectionnez votre destination :",
+    'de': "Wählen Sie Ihr Reiseziel:",
+    'ru': "Выберите направление:",
   },
-  'ar': {
-    placeholder: 'اسألني عن رحلتك...',
-    send: 'إرسال',
-    tripSummary: '📋 ملخص الرحلة',
-    waiting: 'في انتظار المدخلات...',
-    complete: 'أكمل الخطوات لعرض عرض السعر.',
-    aiInput: 'اسألني عن رحلتك...',
+  no_destinations: {
+    'en-IN': "No destinations available for this selection. Please go back and choose a different option.",
+    'hi-IN': "इस विकल्प के लिए कोई गंतव्य उपलब्ध नहीं है। कृपया वापस जाएं।",
+    'mr-IN': "या निवडीसाठी कोणतेही गंतव्य उपलब्ध नाही. कृपया मागे जा.",
+    'gu-IN': "આ પસંદગી માટે કોઈ ગંતવ્ય ઉપલબ્ધ નથી. કૃપા કરી પાછા જાઓ.",
+    'ta-IN': "இந்த தேர்வுக்கு இலக்குகள் இல்லை. திரும்பி வேறொரு விருப்பம் தேர்ந்தெடுக்கவும்.",
+    'te-IN': "ఈ ఎంపికకు గమ్యస్థానాలు అందుబాటులో లేవు. వెనక్కి వెళ్ళి వేరే ఎంపిక చేయండి.",
+    'kn-IN': "ಈ ಆಯ್ಕೆಗೆ ಯಾವುದೇ ಗಮ್ಯಸ್ಥಾನಗಳಿಲ್ಲ. ದಯವಿಟ್ಟು ಹಿಂದೆ ಹೋಗಿ.",
+    'bn-IN': "এই নির্বাচনের জন্য কোনো গন্তব্য নেই। অনুগ্রহ করে ফিরে যান।",
+    'ar': "لا توجد وجهات لهذا الاختيار. يرجى العودة واختيار خيار مختلف.",
+    'zh-CN': "此选择没有可用目的地。请返回选择其他选项。",
+    'fr': "Aucune destination disponible. Veuillez revenir et choisir une autre option.",
+    'de': "Keine Ziele für diese Auswahl verfügbar. Bitte gehen Sie zurück.",
+    'ru': "Для этого выбора нет доступных направлений. Пожалуйста, вернитесь.",
   },
-  'zh-CN': {
-    placeholder: '询问您的旅行计划...',
-    send: '发送',
-    tripSummary: '📋 行程摘要',
-    waiting: '等待输入...',
-    complete: '完成步骤以查看报价。',
-    aiInput: '询问您的旅行计划...',
+  /* ── Season step ── */
+  ask_season: {
+    'en-IN': "Season or Off Season?",
+    'hi-IN': "पीक सीज़न या ऑफ सीज़न?",
+    'mr-IN': "सीझन की ऑफ सीझन?",
+    'gu-IN': "સીઝન કે ઓફ સીઝન?",
+    'ta-IN': "சீசன் அல்லது ஆஃப் சீசன்?",
+    'te-IN': "సీజన్ లేదా ఆఫ్ సీజన్?",
+    'kn-IN': "ಸೀಸನ್ ಅಥವಾ ಆಫ್ ಸೀಸನ್?",
+    'bn-IN': "সিজন না অফ সিজন?",
+    'ar': "موسم ذروة أم خارج الموسم؟",
+    'zh-CN': "旺季还是淡季？",
+    'fr': "Haute saison ou basse saison ?",
+    'de': "Saison oder Nebensaison?",
+    'ru': "Сезон или несезон?",
   },
-  'fr': {
-    placeholder: "Demandez-moi n\'importe quoi sur votre voyage...",
-    send: 'Envoyer',
-    tripSummary: '📋 Résumé du voyage',
-    waiting: 'En attente de saisie...',
-    complete: 'Complétez les étapes pour voir votre devis.',
-    aiInput: "Demandez-moi n\'importe quoi sur votre voyage...",
+  opt_season: {
+    'en-IN': "Season", 'hi-IN': "पीक सीज़न", 'mr-IN': "सीझन", 'gu-IN': "સીઝન",
+    'ta-IN': "சீசன்", 'te-IN': "సీజన్", 'kn-IN': "ಸೀಸನ್", 'bn-IN': "সিজন",
+    'ar': "موسم الذروة", 'zh-CN': "旺季", 'fr': "Haute saison", 'de': "Saison", 'ru': "Сезон",
   },
-  'de': {
-    placeholder: 'Fragen Sie mich zu Ihrer Reise...',
-    send: 'Senden',
-    tripSummary: '📋 Reisezusammenfassung',
-    waiting: 'Warte auf Eingaben...',
-    complete: 'Vervollständigen Sie die Schritte für ein Preisangebot.',
-    aiInput: 'Fragen Sie mich zu Ihrer Reise...',
+  opt_off_season: {
+    'en-IN': "Off Season", 'hi-IN': "ऑफ सीज़न", 'mr-IN': "ऑफ सीझन", 'gu-IN': "ઓફ સીઝન",
+    'ta-IN': "ஆஃப் சீசன்", 'te-IN': "ఆఫ్ సీజన్", 'kn-IN': "ಆಫ್ ಸೀಸನ್", 'bn-IN': "অফ সিজন",
+    'ar': "خارج الموسم", 'zh-CN': "淡季", 'fr': "Basse saison", 'de': "Nebensaison", 'ru': "Несезон",
+  },
+  /* ── Travelers step ── */
+  ask_travelers: {
+    'en-IN': "How many travelers will be joining the trip?",
+    'hi-IN': "यात्रा में कितने यात्री शामिल होंगे?",
+    'mr-IN': "प्रवासात किती प्रवासी सहभागी होतील?",
+    'gu-IN': "પ્રવાસમાં કેટલા મુસાફરો જોડાશે?",
+    'ta-IN': "பயணத்தில் எத்தனை பயணிகள் கலந்துகொள்வார்கள்?",
+    'te-IN': "యాత్రలో ఎంత మంది పర్యాటకులు పాల్గొంటారు?",
+    'kn-IN': "ಪ್ರಯಾಣದಲ್ಲಿ ಎಷ್ಟು ಪ್ರಯಾಣಿಕರು ಸೇರುತ್ತಾರೆ?",
+    'bn-IN': "ভ্রমণে কতজন যাত্রী যোগ দেবেন?",
+    'ar': "كم عدد المسافرين الذين سينضمون للرحلة؟",
+    'zh-CN': "有多少旅行者参加？",
+    'fr': "Combien de voyageurs participeront au voyage ?",
+    'de': "Wie viele Reisende nehmen teil?",
+    'ru': "Сколько путешественников примут участие?",
+  },
+  lbl_adults: {
+    'en-IN': "Adults", 'hi-IN': "वयस्क", 'mr-IN': "प्रौढ", 'gu-IN': "પ્રૌઢ",
+    'ta-IN': "பெரியவர்கள்", 'te-IN': "పెద్దలు", 'kn-IN': "ವಯಸ್ಕರು", 'bn-IN': "প্রাপ্তবয়স্ক",
+    'ar': "بالغون", 'zh-CN': "成人", 'fr': "Adultes", 'de': "Erwachsene", 'ru': "Взрослые",
+  },
+  lbl_children: {
+    'en-IN': "Children", 'hi-IN': "बच्चे", 'mr-IN': "मुले", 'gu-IN': "બાળકો",
+    'ta-IN': "குழந்தைகள்", 'te-IN': "పిల్లలు", 'kn-IN': "ಮಕ್ಕಳು", 'bn-IN': "শিশু",
+    'ar': "أطفال", 'zh-CN': "儿童", 'fr': "Enfants", 'de': "Kinder", 'ru': "Дети",
+  },
+  btn_confirm_travelers: {
+    'en-IN': "Confirm Travelers →", 'hi-IN': "यात्री पुष्टि करें →", 'mr-IN': "प्रवासी निश्चित करा →",
+    'gu-IN': "મુસાફરો પૂષ્ટ કરો →", 'ta-IN': "பயணிகளை உறுதிப்படுத்தவும் →",
+    'te-IN': "పర్యాటకులను నిర్ధారించండి →", 'kn-IN': "ಪ್ರಯಾಣಿಕರನ್ನು ದೃಢೀಕರಿಸಿ →",
+    'bn-IN': "যাত্রী নিশ্চিত করুন →", 'ar': "تأكيد المسافرين ←",
+    'zh-CN': "确认旅行者 →", 'fr': "Confirmer les voyageurs →", 'de': "Reisende bestätigen →",
+    'ru': "Подтвердить путешественников →",
+  },
+  /* ── Stay experience step ── */
+  ask_stay: {
+    'en-IN': "How many nights? And how would you like to choose your accommodation?",
+    'hi-IN': "कितनी रातें? और आप अपना आवास कैसे चुनना चाहते हैं?",
+    'mr-IN': "किती रात्री? आणि तुम्हाला निवासस्थान कसे निवडायचे आहे?",
+    'gu-IN': "કેટલી રાત? અને તમે આવાસ કેવી રીતે પસંદ કરવા માંગો છો?",
+    'ta-IN': "எத்தனை இரவுகள்? உங்கள் தங்குமிடத்தை எவ்வாறு தேர்வு செய்ய விரும்புகிறீர்கள்?",
+    'te-IN': "ఎన్ని రాత్రులు? మీ వసతిని ఎలా ఎంచుకోవాలనుకుంటున్నారు?",
+    'kn-IN': "ಎಷ್ಟು ರಾತ್ರಿಗಳು? ನಿಮ್ಮ ವಸತಿಯನ್ನು ಹೇಗೆ ಆಯ್ಕೆ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    'bn-IN': "কত রাত? এবং আপনার আবাসন কিভাবে বেছে নিতে চান?",
+    'ar': "كم عدد الليالي؟ وكيف تريد اختيار إقامتك؟",
+    'zh-CN': "需要几晚？您希望如何选择住宿？",
+    'fr': "Combien de nuits ? Et comment souhaitez-vous choisir votre hébergement ?",
+    'de': "Wie viele Nächte? Und wie möchten Sie Ihre Unterkunft wählen?",
+    'ru': "Сколько ночей? Как вы хотите выбрать жилье?",
+  },
+  lbl_nights: {
+    'en-IN': "🌙 Nights", 'hi-IN': "🌙 रातें", 'mr-IN': "🌙 रात्री", 'gu-IN': "🌙 રાત",
+    'ta-IN': "🌙 இரவுகள்", 'te-IN': "🌙 రాత్రులు", 'kn-IN': "🌙 ರಾತ್ರಿಗಳು", 'bn-IN': "🌙 রাত",
+    'ar': "🌙 ليالٍ", 'zh-CN': "🌙 晚", 'fr': "🌙 Nuits", 'de': "🌙 Nächte", 'ru': "🌙 Ночей",
+  },
+  lbl_sightseeing_days: {
+    'en-IN': "🗺️ Sightseeing Days", 'hi-IN': "🗺️ दर्शनीय दिन", 'mr-IN': "🗺️ पर्यटन दिवस",
+    'gu-IN': "🗺️ સ્થળ દર્શન દિવસ", 'ta-IN': "🗺️ சுற்றுலா நாட்கள்", 'te-IN': "🗺️ సైట్‌సీయింగ్ రోజులు",
+    'kn-IN': "🗺️ ಪ್ರವಾಸ ದಿನಗಳು", 'bn-IN': "🗺️ দর্শনীয় দিন", 'ar': "🗺️ أيام الجولات",
+    'zh-CN': "🗺️ 观光天数", 'fr': "🗺️ Jours de visite", 'de': "🗺️ Besichtigungstage", 'ru': "🗺️ Дни экскурсий",
+  },
+  lbl_accommodation_source: {
+    'en-IN': "🏨 Accommodation Source", 'hi-IN': "🏨 आवास स्रोत", 'mr-IN': "🏨 निवासस्थान स्रोत",
+    'gu-IN': "🏨 આવાસ સ્ત્રોત", 'ta-IN': "🏨 தங்குமிட மூலம்", 'te-IN': "🏨 వసతి వనరు",
+    'kn-IN': "🏨 ವಸತಿ ಮೂಲ", 'bn-IN': "🏨 আবাসন উৎস", 'ar': "🏨 مصدر الإقامة",
+    'zh-CN': "🏨 住宿来源", 'fr': "🏨 Source d'hébergement", 'de': "🏨 Unterkunftsquelle", 'ru': "🏨 Источник жилья",
+  },
+  btn_our_hotels: {
+    'en-IN': "🗄️ Our Hotels", 'hi-IN': "🗄️ हमारे होटल", 'mr-IN': "🗄️ आमचे हॉटेल्स",
+    'gu-IN': "🗄️ અમારી હોટેલ્સ", 'ta-IN': "🗄️ எங்கள் ஹோட்டல்கள்", 'te-IN': "🗄️ మా హోటళ్ళు",
+    'kn-IN': "🗄️ ನಮ್ಮ ಹೋಟೆಲ್ಗಳು", 'bn-IN': "🗄️ আমাদের হোটেল", 'ar': "🗄️ فنادقنا",
+    'zh-CN': "🗄️ 我们的酒店", 'fr': "🗄️ Nos hôtels", 'de': "🗄️ Unsere Hotels", 'ru': "🗄️ Наши отели",
+  },
+  btn_live_hotels: {
+    'en-IN': "🌐 Live Hotels (Amadeus)", 'hi-IN': "🌐 लाइव होटल (अमेडियस)", 'mr-IN': "🌐 लाईव्ह हॉटेल्स (Amadeus)",
+    'gu-IN': "🌐 લાઇવ હોટેલ્સ (Amadeus)", 'ta-IN': "🌐 நேரடி ஹோட்டல்கள் (Amadeus)",
+    'te-IN': "🌐 లైవ్ హోటళ్ళు (Amadeus)", 'kn-IN': "🌐 ಲೈವ್ ಹೋಟೆಲ್ಗಳು (Amadeus)",
+    'bn-IN': "🌐 লাইভ হোটেল (Amadeus)", 'ar': "🌐 فنادق مباشرة (Amadeus)",
+    'zh-CN': "🌐 实时酒店 (Amadeus)", 'fr': "🌐 Hôtels en direct (Amadeus)",
+    'de': "🌐 Live-Hotels (Amadeus)", 'ru': "🌐 Реальные отели (Amadeus)",
+  },
+  lbl_sightseeing_config: {
+    'en-IN': "📍 Sightseeing Configuration", 'hi-IN': "📍 दर्शनीय स्थल विन्यास", 'mr-IN': "📍 पर्यटन व्यवस्था",
+    'gu-IN': "📍 સ્થળ-દર્શન ગોઠવણ", 'ta-IN': "📍 சுற்றுலா அமைப்பு", 'te-IN': "📍 సైట్‌సీయింగ్ కాన్ఫిగరేషన్",
+    'kn-IN': "📍 ಪ್ರವಾಸ ಸಂರಚನೆ", 'bn-IN': "📍 দর্শনীয় কনফিগারেশন", 'ar': "📍 تكوين الجولات",
+    'zh-CN': "📍 观光配置", 'fr': "📍 Configuration des visites", 'de': "📍 Besichtigungskonfiguration",
+    'ru': "📍 Настройка экскурсий",
+  },
+  btn_confirm_stay: {
+    'en-IN': "Confirm Stay & Continue →", 'hi-IN': "ठहरना पुष्टि करें और जारी रखें →",
+    'mr-IN': "मुक्काम निश्चित करा आणि पुढे जा →", 'gu-IN': "રોકાણ પૂષ્ટ કરો અને ચાલુ રાખો →",
+    'ta-IN': "தங்குதலை உறுதிப்படுத்தி தொடரவும் →", 'te-IN': "స్టే నిర్ధారించి కొనసాగండి →",
+    'kn-IN': "ತಂಗುವಿಕೆ ದೃಢೀಕರಿಸಿ ಮುಂದುವರಿಯಿರಿ →", 'bn-IN': "থাকার বিষয়টি নিশ্চিত করুন →",
+    'ar': "تأكيد الإقامة والمتابعة ←", 'zh-CN': "确认住宿并继续 →",
+    'fr': "Confirmer le séjour et continuer →", 'de': "Aufenthalt bestätigen und weiter →",
+    'ru': "Подтвердить проживание и продолжить →",
+  },
+  err_select_nights: {
+    'en-IN': "Please select at least 1 night.", 'hi-IN': "कृपया कम से कम 1 रात चुनें।",
+    'mr-IN': "कृपया किमान 1 रात्र निवडा.", 'gu-IN': "કૃપા કરી ઓછામાં ઓછી 1 રાત પસંદ કરો.",
+    'ta-IN': "குறைந்தது 1 இரவு தேர்ந்தெடுக்கவும்.", 'te-IN': "దయచేసి కనీసం 1 రాత్రి ఎంచుకోండి.",
+    'kn-IN': "ದಯವಿಟ್ಟು ಕನಿಷ್ಠ 1 ರಾತ್ರಿ ಆಯ್ಕೆ ಮಾಡಿ.", 'bn-IN': "অনুগ্রহ করে কমপক্ষে ১ রাত নির্বাচন করুন।",
+    'ar': "يرجى اختيار ليلة واحدة على الأقل.", 'zh-CN': "请至少选择1晚。",
+    'fr': "Veuillez sélectionner au moins 1 nuit.", 'de': "Bitte wählen Sie mindestens 1 Nacht.",
+    'ru': "Пожалуйста, выберите хотя бы 1 ночь.",
+  },
+  err_select_live_hotel: {
+    'en-IN': "You selected Live Hotels mode. Please search and select a hotel first.",
+    'hi-IN': "आपने लाइव होटल मोड चुना है। पहले कोई होटल खोजें और चुनें।",
+    'mr-IN': "तुम्ही लाईव्ह हॉटेल मोड निवडला आहे. आधी हॉटेल शोधा आणि निवडा.",
+    'gu-IN': "તમે લાઇવ હોટેલ મોડ પસંદ કર્યો છે. પ્રથમ હોટેલ શોધો અને પસંદ કરો.",
+    'ta-IN': "நேரடி ஹோட்டல் முறையை தேர்ந்தெடுத்தீர்கள். முதலில் ஹோட்டல் தேடி தேர்ந்தெடுக்கவும்.",
+    'te-IN': "మీరు లైవ్ హోటల్ మోడ్ ఎంచుకున్నారు. ముందుగా హోటల్ శోధించి ఎంచుకోండి.",
+    'kn-IN': "ನೀವು ಲೈವ್ ಹೋಟೆಲ್ ಮೋಡ್ ಆಯ್ಕೆ ಮಾಡಿದ್ದೀರಿ. ಮೊದಲು ಹೋಟೆಲ್ ಹುಡುಕಿ ಆಯ್ಕೆ ಮಾಡಿ.",
+    'bn-IN': "আপনি লাইভ হোটেল মোড বেছেছেন। প্রথমে হোটেল খুঁজুন এবং নির্বাচন করুন।",
+    'ar': "لقد اخترت وضع الفنادق المباشرة. يرجى البحث عن فندق واختياره أولاً.",
+    'zh-CN': "您选择了实时酒店模式。请先搜索并选择酒店。",
+    'fr': "Vous avez sélectionné le mode Hôtels en direct. Veuillez d'abord rechercher et sélectionner un hôtel.",
+    'de': "Sie haben den Live-Hotel-Modus gewählt. Bitte suchen und wählen Sie zuerst ein Hotel.",
+    'ru': "Вы выбрали режим реальных отелей. Сначала найдите и выберите отель.",
+  },
+  /* ── Rooms step ── */
+  ask_rooms: {
+    'en-IN': "How many rooms do you need? (We can auto-calculate based on your group size.)",
+    'hi-IN': "आपको कितने कमरे चाहिए? (हम आपके समूह के आकार के अनुसार स्वचालित गणना कर सकते हैं।)",
+    'mr-IN': "तुम्हाला किती खोल्या हव्या आहेत? (आम्ही तुमच्या गटाच्या आकारानुसार स्वयंचलित गणना करू शकतो.)",
+    'gu-IN': "તમને કેટલા રૂમ જોઈએ? (અમે તમારા જૂથ કદ અનુસાર આपomatically ગણતરી કરી શકીએ.)",
+    'ta-IN': "உங்களுக்கு எத்தனை அறைகள் தேவை? (உங்கள் குழு அளவின் படி தானாக கணக்கிடலாம்.)",
+    'te-IN': "మీకు ఎన్ని గదులు కావాలి? (మీ గ్రూప్ సైజ్ ఆధారంగా ఆటోమేటిగ్గా లెక్కించవచ్చు.)",
+    'kn-IN': "ನಿಮಗೆ ಎಷ್ಟು ಕೊಠಡಿಗಳು ಬೇಕು? (ನಿಮ್ಮ ಗುಂಪಿನ ಗಾತ್ರವನ್ನು ಆಧರಿಸಿ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಲೆಕ್ಕ ಹಾಕಬಹುದು.)",
+    'bn-IN': "আপনার কতটি রুম দরকার? (আমরা আপনার গ্রুপের আকার অনুযায়ী স্বয়ংক্রিয়ভাবে গণনা করতে পারি।)",
+    'ar': "كم غرفة تحتاج؟ (يمكننا الحساب تلقائياً بناءً على حجم مجموعتك.)",
+    'zh-CN': "您需要几间客房？（我们可以根据您的团队规模自动计算。）",
+    'fr': "Combien de chambres vous faut-il ? (Nous pouvons calculer automatiquement en fonction de la taille du groupe.)",
+    'de': "Wie viele Zimmer brauchen Sie? (Wir können automatisch berechnen.)",
+    'ru': "Сколько номеров вам нужно? (Можем рассчитать автоматически.)",
+  },
+  lbl_rooms_auto: {
+    'en-IN': "Rooms (0 = auto)", 'hi-IN': "कमरे (0 = स्वचालित)", 'mr-IN': "खोल्या (0 = स्वयंचलित)",
+    'gu-IN': "રૂમ (0 = ઓટો)", 'ta-IN': "அறைகள் (0 = தானியங்கி)", 'te-IN': "గదులు (0 = ఆటో)",
+    'kn-IN': "ಕೊಠಡಿಗಳು (0 = ಸ್ವಯಂ)", 'bn-IN': "রুম (0 = স্বয়ংক্রিয়)", 'ar': "غرف (0 = تلقائي)",
+    'zh-CN': "客房（0=自动）", 'fr': "Chambres (0 = auto)", 'de': "Zimmer (0 = auto)", 'ru': "Номера (0 = авто)",
+  },
+  note_rooms_auto: {
+    'en-IN': "Set to 0 to auto-calculate based on travelers and sharing type",
+    'hi-IN': "यात्रियों और शेयरिंग प्रकार के आधार पर स्वत: गणना के लिए 0 सेट करें",
+    'mr-IN': "प्रवासी आणि शेअरिंग प्रकारावर आधारित स्वयंगणनेसाठी 0 सेट करा",
+    'gu-IN': "મુસાફરો અને શેરિંગ પ્રકારના આધારે ઓટો-ગણતરી માટે 0 સેટ કરો",
+    'ta-IN': "பயணிகள் மற்றும் பகிர்வு வகையின் படி தானாக கணிக்க 0 ஆக அமைக்கவும்",
+    'te-IN': "పర్యాటకులు మరియు షేరింగ్ రకం ఆధారంగా ఆటో-గణన కోసం 0 గా సెట్ చేయండి",
+    'kn-IN': "ಪ್ರಯಾಣಿಕರು ಮತ್ತು ಹಂಚಿಕೆ ಪ್ರಕಾರದ ಆಧಾರದಲ್ಲಿ ಸ್ವಯಂ-ಲೆಕ್ಕ ಹಾಕಲು 0 ಸೆಟ್ ಮಾಡಿ",
+    'bn-IN': "যাত্রী ও শেয়ারিং টাইপের ভিত্তিতে অটো-গণনার জন্য 0 সেট করুন",
+    'ar': "اضبطها على 0 للحساب التلقائي بناءً على المسافرين ونوع المشاركة",
+    'zh-CN': "设为0可根据旅行者和共享类型自动计算", 'fr': "Mettre 0 pour calculer automatiquement",
+    'de': "0 setzen für automatische Berechnung", 'ru': "Установите 0 для автоматического расчёта",
+  },
+  btn_confirm_rooms: {
+    'en-IN': "Confirm Rooms →", 'hi-IN': "कमरे पुष्टि करें →", 'mr-IN': "खोल्या निश्चित करा →",
+    'gu-IN': "રૂમ પૂષ્ટ કરો →", 'ta-IN': "அறைகளை உறுதிப்படுத்தவும் →", 'te-IN': "గదులు నిర్ధారించండి →",
+    'kn-IN': "ಕೊಠಡಿಗಳು ದೃಢೀಕರಿಸಿ →", 'bn-IN': "রুম নিশ্চিত করুন →", 'ar': "تأكيد الغرف ←",
+    'zh-CN': "确认客房 →", 'fr': "Confirmer les chambres →", 'de': "Zimmer bestätigen →",
+    'ru': "Подтвердить номера →",
+  },
+  /* ── Transport step ── */
+  ask_transport: {
+    'en-IN': "Choose your transport option:",
+    'hi-IN': "अपना परिवहन विकल्प चुनें:",
+    'mr-IN': "तुमचा वाहतूक पर्याय निवडा:",
+    'gu-IN': "તમારો પરિવહન વિકલ્પ પસંદ કરો:",
+    'ta-IN': "உங்கள் போக்குவரத்து விருப்பத்தை தேர்ந்தெடுக்கவும்:",
+    'te-IN': "మీ రవాణా ఎంపికను ఎంచుకోండి:",
+    'kn-IN': "ನಿಮ್ಮ ಸಾರಿಗೆ ಆಯ್ಕೆ ಆರಿಸಿ:",
+    'bn-IN': "আপনার পরিবহন বিকল্প নির্বাচন করুন:",
+    'ar': "اختر وسيلة نقلك:",
+    'zh-CN': "选择您的交通方式：",
+    'fr': "Choisissez votre option de transport :",
+    'de': "Wählen Sie Ihre Transportoption:",
+    'ru': "Выберите вид транспорта:",
+  },
+  no_transport: {
+    'en-IN': "No transport options available. Please go back.",
+    'hi-IN': "कोई परिवहन विकल्प उपलब्ध नहीं। कृपया वापस जाएं।",
+    'mr-IN': "कोणतेही वाहतूक पर्याय उपलब्ध नाहीत. कृपया मागे जा.",
+    'gu-IN': "કોઈ પરિવહન વિકલ્પ ઉપલબ્ધ નથી. કૃپা کری પાछا જاઓ.",
+    'ta-IN': "போக்குவரத்து விருப்பங்கள் இல்லை. திரும்பி செல்லவும்.",
+    'te-IN': "రవాణా ఎంపికలు అందుబాటులో లేవు. దయచేసి వెనక్కి వెళ్ళండి.",
+    'kn-IN': "ಸಾರಿಗೆ ಆಯ್ಕೆಗಳಿಲ್ಲ. ದಯವಿಟ್ಟು ಹಿಂದೆ ಹೋಗಿ.",
+    'bn-IN': "কোনো পরিবহন বিকল্প নেই। অনুগ্রহ করে ফিরে যান।",
+    'ar': "لا توجد خيارات نقل. يرجى العودة.", 'zh-CN': "无交通选项。请返回。",
+    'fr': "Aucune option de transport disponible. Veuillez revenir.", 'de': "Keine Transportoptionen verfügbar. Bitte gehen Sie zurück.",
+    'ru': "Нет доступных вариантов транспорта. Пожалуйста, вернитесь.",
+  },
+  /* ── Flight section ── */
+  ask_flight: {
+    'en-IN': "Great! Please configure your flight details:",
+    'hi-IN': "बढ़िया! अपनी उड़ान की जानकारी दर्ज करें:",
+    'mr-IN': "छान! आपल्या उड्डाणाचे तपशील प्रविष्ट करा:",
+    'gu-IN': "સરસ! તમારી ફ્લાઇટ વિગત ભરો:",
+    'ta-IN': "அருமை! உங்கள் விமான விவரங்களை உள்ளிடவும்:",
+    'te-IN': "చాలా బాగుంది! మీ విమాన వివరాలు నమోదు చేయండి:",
+    'kn-IN': "ಚೆನ್ನಾಗಿದೆ! ನಿಮ್ಮ ವಿಮಾನ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ:",
+    'bn-IN': "দারুণ! আপনার ফ্লাইটের বিবরণ লিখুন:",
+    'ar': "رائع! يرجى إدخال تفاصيل رحلتك الجوية:",
+    'zh-CN': "太好了！请输入您的航班详情：",
+    'fr': "Excellent ! Veuillez configurer les détails de votre vol :",
+    'de': "Toll! Bitte geben Sie Ihre Flugdetails ein:",
+    'ru': "Отлично! Пожалуйста, укажите детали перелёта:",
+  },
+  btn_skip_flight: {
+    'en-IN': "Skip Flight & Continue →", 'hi-IN': "उड़ान छोड़ें और जारी रखें →",
+    'mr-IN': "उड्डाण वगळा आणि पुढे जा →", 'gu-IN': "ફ્લાઇટ છોડો અને ચાલુ રાખો →",
+    'ta-IN': "விமானத்தை தவிர்த்து தொடரவும் →", 'te-IN': "విమానాన్ని దాటవేసి కొనసాగండి →",
+    'kn-IN': "ವಿಮಾನ ಬಿಟ್ಟು ಮುಂದುವರಿಯಿರಿ →", 'bn-IN': "ফ্লাইট এড়িয়ে চলুন →",
+    'ar': "تخطي الرحلة والمتابعة ←", 'zh-CN': "跳过航班继续 →",
+    'fr': "Passer le vol et continuer →", 'de': "Flug überspringen und weiter →",
+    'ru': "Пропустить перелёт и продолжить →",
+  },
+  btn_continue_flight: {
+    'en-IN': "Continue with Selected Flight →", 'hi-IN': "चयनित उड़ान के साथ जारी रखें →",
+    'mr-IN': "निवडलेल्या उड्डाणासह सुरू ठेवा →", 'gu-IN': "ચયનિત ફ્લાઇટ સાથે ચાલુ રાખો →",
+    'ta-IN': "தேர்ந்தெடுத்த விமானத்துடன் தொடரவும் →", 'te-IN': "ఎంచుకున్న విమానంతో కొనసాగండి →",
+    'kn-IN': "ಆಯ್ಕೆಯಾದ ವಿಮಾನದೊಂದಿಗೆ ಮುಂದುವರಿಯಿರಿ →", 'bn-IN': "নির্বাচিত ফ্লাইটের সাথে চালিয়ে যান →",
+    'ar': "المتابعة مع الرحلة المختارة ←", 'zh-CN': "继续选定航班 →",
+    'fr': "Continuer avec le vol sélectionné →", 'de': "Mit ausgewähltem Flug weiter →",
+    'ru': "Продолжить с выбранным рейсом →",
+  },
+  /* ── Addons step ── */
+  ask_addons: {
+    'en-IN': "Any add-ons for your trip? (Select all that apply)",
+    'hi-IN': "अपनी यात्रा के लिए कोई अतिरिक्त सेवाएं? (जो लागू हों सब चुनें)",
+    'mr-IN': "तुमच्या प्रवासासाठी काही अॅड-ऑन? (जे लागू होतात ते सर्व निवडा)",
+    'gu-IN': "તમારી યાત્રા માટે કોઈ ઍડ-ઓન? (જે લાગુ પડે તે બધા પસંદ કરો)",
+    'ta-IN': "உங்கள் பயணத்திற்கு ஏதேனும் கூடுதல் சேவைகளா? (பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்)",
+    'te-IN': "మీ యాత్రకు ఏదైనా యాడ్-ఆన్స్? (వర్తించే అన్నీ ఎంచుకోండి)",
+    'kn-IN': "ನಿಮ್ಮ ಪ್ರಯಾಣಕ್ಕೆ ಯಾವುದಾದರೂ ಆಡ್-ಆನ್‌ಗಳು? (ಅನ್ವಯಿಸಿದ ಎಲ್ಲವನ್ನೂ ಆಯ್ಕೆ ಮಾಡಿ)",
+    'bn-IN': "আপনার ভ্রমণের জন্য কোনো অ্যাড-অন? (যা প্রযোজ্য সব বেছে নিন)",
+    'ar': "هل هناك إضافات لرحلتك؟ (حدد كل ما ينطبق)",
+    'zh-CN': "您的旅行有任何附加服务吗？（选择所有适用项）",
+    'fr': "Des suppléments pour votre voyage ? (Sélectionnez tout ce qui s'applique)",
+    'de': "Zusatzleistungen für Ihre Reise? (Alles Zutreffende auswählen)",
+    'ru': "Дополнительные услуги для поездки? (Выберите всё подходящее)",
+  },
+  no_addons: {
+    'en-IN': "No add-ons available for this region. Proceeding to price calculation...",
+    'hi-IN': "इस क्षेत्र के लिए कोई अतिरिक्त सेवाएं उपलब्ध नहीं। मूल्य गणना पर जा रहे हैं...",
+    'mr-IN': "या प्रदेशासाठी कोणतेही अॅड-ऑन उपलब्ध नाहीत. किंमत गणनेकडे जात आहे...",
+    'gu-IN': "આ પ્રદેશ માટે કોઈ ઍડ-ઓન ઉપলબ્ધ નથી. ભાવ ગણતરી પર જઈ રહ્યા છીએ...",
+    'ta-IN': "இந்த பகுதிக்கு கூடுதல் சேவைகள் இல்லை. விலை கணக்கீட்டிற்கு செல்கிறோம்...",
+    'te-IN': "ఈ ప్రాంతానికి యాడ్-ఆన్స్ అందుబాటులో లేవు. ధర లెక్కింపుకు వెళ్తున్నాము...",
+    'kn-IN': "ಈ ಪ್ರದೇಶಕ್ಕೆ ಆಡ್-ಆನ್‌ಗಳಿಲ್ಲ. ಬೆಲೆ ಲೆಕ್ಕಾಚಾರಕ್ಕೆ ಮುಂದುವರಿಯಲಾಗುತ್ತಿದೆ...",
+    'bn-IN': "এই অঞ্চলের জন্য কোনো অ্যাড-অন নেই। মূল্য গণনায় যাচ্ছি...",
+    'ar': "لا توجد إضافات لهذه المنطقة. جارٍ المتابعة لحساب السعر...",
+    'zh-CN': "此地区无附加服务。正在进行价格计算...",
+    'fr': "Aucun supplément disponible. Passage au calcul du prix...",
+    'de': "Keine Zusatzleistungen verfügbar. Weiter zur Preisberechnung...",
+    'ru': "Нет дополнительных услуг для этого региона. Переходим к расчёту цены...",
+  },
+  no_addons_live: {
+    'en-IN': "Add-ons are not available when booking live hotels. Proceeding to price calculation...",
+    'hi-IN': "लाइव होटल बुक करते समय अतिरिक्त सेवाएं उपलब्ध नहीं हैं। मूल्य गणना पर जा रहे हैं...",
+    'mr-IN': "लाईव्ह हॉटेल बुक करताना अॅड-ऑन उपलब्ध नाहीत. किंमत गणनेकडे जात आहे...",
+    'gu-IN': "લાઇव્ સ ​​હોટેલ બૂક કરતી વખતે ઍડ-ઓન ઉपलब्ध નથી. ભાવ ગণtri પर जای रहे छे...",
+    'ta-IN': "நேரடி ஹோட்டல் முன்பதிவில் கூடுதல் சேவைகள் கிடைக்காது. விலை கணக்கீட்டிற்கு செல்கிறோம்...",
+    'te-IN': "లైవ్ హోటళ్ళు బుక్ చేస్తున్నప్పుడు యాడ్-ఆన్స్ అందుబాటులో లేవు. ధర లెక్కింపుకు వెళ్తున్నాము...",
+    'kn-IN': "ಲೈವ್ ಹೋಟೆಲ್ ಬುಕಿಂಗ್‌ನಲ್ಲಿ ಆಡ್-ಆನ್‌ಗಳಿಲ್ಲ. ಬೆಲೆ ಲೆಕ್ಕಾಚಾರಕ್ಕೆ ಮುಂದುವರಿಯಲಾಗುತ್ತಿದೆ...",
+    'bn-IN': "লাইভ হোটেল বুক করার সময় অ্যাড-অন পাওয়া যায় না। মূল্য গণনায় যাচ্ছি...",
+    'ar': "الإضافات غير متاحة عند حجز الفنادق المباشرة. جارٍ حساب السعر...",
+    'zh-CN': "预订实时酒店时无附加服务。正在计算价格...",
+    'fr': "Les suppléments ne sont pas disponibles pour les hôtels en direct. Calcul du prix...",
+    'de': "Add-ons sind bei Live-Hotels nicht verfügbar. Preisberechnung...",
+    'ru': "Дополнения недоступны при бронировании реальных отелей. Расчёт цены...",
+  },
+  btn_get_quote: {
+    'en-IN': "Get My Price Quote →", 'hi-IN': "मूल्य उद्धरण प्राप्त करें →",
+    'mr-IN': "माझा किंमत कोट मिळवा →", 'gu-IN': "ભાવ ઉद्धரण મેળવો →",
+    'ta-IN': "என் விலை மேற்கோளைப் பெறவும் →", 'te-IN': "నా ధర కోటేషన్ పొందండి →",
+    'kn-IN': "ನನ್ನ ಬೆಲೆ ಉದ್ಧರಣ ಪಡೆಯಿರಿ →", 'bn-IN': "আমার মূল্য কোটেশন পান →",
+    'ar': "احصل على عرض السعر الخاص بي ←", 'zh-CN': "获取我的报价 →",
+    'fr': "Obtenir mon devis →", 'de': "Mein Preisangebot erhalten →",
+    'ru': "Получить мое ценовое предложение →",
+  },
+  /* ── Modify options ── */
+  opt_change_hotel: {
+    'en-IN': "Change Hotel", 'hi-IN': "होटल बदलें", 'mr-IN': "हॉटेल बदला",
+    'gu-IN': "હોटેલ બদલો", 'ta-IN': "ஹோட்டல் மாற்று", 'te-IN': "హోటల్ మార్చు",
+    'kn-IN': "ಹೋಟೆಲ್ ಬದಲಾಯಿಸಿ", 'bn-IN': "হোটেল পরিবর্তন করুন", 'ar': "تغيير الفندق",
+    'zh-CN': "更换酒店", 'fr': "Changer d'hôtel", 'de': "Hotel wechseln", 'ru': "Сменить отель",
+  },
+  opt_change_transport: {
+    'en-IN': "Change Transport", 'hi-IN': "परिवहन बदलें", 'mr-IN': "वाहतूक बदला",
+    'gu-IN': "પરિવહન બدলо", 'ta-IN': "போக்குவரத்தை மாற்று", 'te-IN': "రవాణా మార్చు",
+    'kn-IN': "ಸಾರಿಗೆ ಬದಲಾಯಿಸಿ", 'bn-IN': "পরিবহন পরিবর্তন করুন", 'ar': "تغيير وسيلة النقل",
+    'zh-CN': "更换交通", 'fr': "Changer de transport", 'de': "Transport wechseln", 'ru': "Изменить транспорт",
+  },
+  opt_modify_travelers: {
+    'en-IN': "Modify Travelers", 'hi-IN': "यात्री बदलें", 'mr-IN': "प्रवासी बदला",
+    'gu-IN': "મુसाफরો बदलो", 'ta-IN': "பயணிகளை திருத்தவும்", 'te-IN': "పర్యాటకులను సవరించు",
+    'kn-IN': "ಪ್ರಯಾಣಿಕರನ್ನು ಮಾರ್ಪಡಿಸಿ", 'bn-IN': "যাত্রী পরিবর্তন করুন", 'ar': "تعديل المسافرين",
+    'zh-CN': "修改旅行者", 'fr': "Modifier les voyageurs", 'de': "Reisende ändern", 'ru': "Изменить путешественников",
+  },
+  opt_recalculate: {
+    'en-IN': "Recalculate", 'hi-IN': "पुनः गणना करें", 'mr-IN': "पुनर्गणना",
+    'gu-IN': "ફેriGata ગણ", 'ta-IN': "மறுகணக்கீடு", 'te-IN': "తిరిగి లెక్కించు",
+    'kn-IN': "ಮರು ಲೆಕ್ಕ ಹಾಕಿ", 'bn-IN': "পুনরায় গণনা করুন", 'ar': "إعادة الحساب",
+    'zh-CN': "重新计算", 'fr': "Recalculer", 'de': "Neu berechnen", 'ru': "Пересчитать",
+  },
+  opt_book_package: {
+    'en-IN': "📋 Book Package", 'hi-IN': "📋 पैकेज बुक करें", 'mr-IN': "📋 पॅकेज बुक करा",
+    'gu-IN': "📋 पैकेज बुক करो", 'ta-IN': "📋 தொகுப்பை முன்பதிவு செய்", 'te-IN': "📋 ప్యాకేజ్ బుక్ చేయి",
+    'kn-IN': "📋 ಪ್ಯಾಕೇಜ್ ಬುಕ್ ಮಾಡಿ", 'bn-IN': "📋 প্যাকেজ বুক করুন", 'ar': "📋 حجز الباقة",
+    'zh-CN': "📋 预订套餐", 'fr': "📋 Réserver le forfait", 'de': "📋 Paket buchen", 'ru': "📋 Забронировать пакет",
+  },
+  opt_start_over: {
+    'en-IN': "Start Over", 'hi-IN': "फिर से शुरू करें", 'mr-IN': "पुन्हा सुरू करा",
+    'gu-IN': "ফिரিथी शरुआत करो", 'ta-IN': "மீண்டும் தொடங்கு", 'te-IN': "మళ్ళీ మొదలుపెట్టు",
+    'kn-IN': "ಮೊದಲಿನಿಂದ ಶುರು ಮಾಡಿ", 'bn-IN': "নতুন করে শুরু করুন", 'ar': "البدء من جديد",
+    'zh-CN': "重新开始", 'fr': "Recommencer", 'de': "Von vorne anfangen", 'ru': "Начать заново",
+  },
+  /* ── Summary sidebar ── */
+  sidebar_waiting: {
+    'en-IN': "Waiting for inputs…", 'hi-IN': "इनपुट का इंतज़ार...", 'mr-IN': "इनपुटची वाट पाहत...",
+    'gu-IN': "ઇनपुट मাটे राह जोई...", 'ta-IN': "உள்ளீடுகளுக்காக காத்திருக்கிறது...",
+    'te-IN': "ఇన్‌పుట్‌ల కోసం వేచి ఉన్నాము...", 'kn-IN': "ಇನ್‌ಪುಟ್‌ಗಳಿಗಾಗಿ ಕಾಯುತ್ತಿದೆ...",
+    'bn-IN': "ইনপুটের অপেক্ষায়...", 'ar': "في انتظار المدخلات...",
+    'zh-CN': "等待输入...", 'fr': "En attente de saisie...", 'de': "Warte auf Eingaben...",
+    'ru': "Ожидание ввода...",
+  },
+  /* ── AI Input placeholder / Send button ── */
+  ai_placeholder: {
+    'en-IN': "Ask me anything about your trip...",
+    'hi-IN': "अपनी यात्रा के बारे में पूछें...",
+    'mr-IN': "तुमच्या सहलीबद्दल विचारा...",
+    'gu-IN': "તमारी यात्रा विशे पूछो...",
+    'ta-IN': "உங்கள் பயணத்தைப் பற்றி கேளுங்கள்...",
+    'te-IN': "మీ యాత్ర గురించి అడగండి...",
+    'kn-IN': "ನಿಮ್ಮ ಪ್ರಯಾಣದ ಬಗ್ಗೆ ಕೇಳಿ...",
+    'bn-IN': "আপনার ভ্রমণ সম্পর্কে জিজ্ঞেস করুন...",
+    'ar': "اسألني عن رحلتك...",
+    'zh-CN': "询问您的旅行计划...",
+    'fr': "Demandez-moi n'importe quoi sur votre voyage...",
+    'de': "Fragen Sie mich zu Ihrer Reise...",
+    'ru': "Задайте любой вопрос о вашей поездке...",
+  },
+  btn_send: {
+    'en-IN': "Send", 'hi-IN': "भेजें", 'mr-IN': "पाठवा", 'gu-IN': "मोकलो",
+    'ta-IN': "அனுப்பு", 'te-IN': "పంపు", 'kn-IN': "ಕಳಿಸಿ", 'bn-IN': "পাঠান",
+    'ar': "إرسال", 'zh-CN': "发送", 'fr': "Envoyer", 'de': "Senden", 'ru': "Отправить",
+  },
+  trip_summary: {
+    'en-IN': "📋 Trip Summary", 'hi-IN': "📋 यात्रा सारांश", 'mr-IN': "📋 सहल सारांश",
+    'gu-IN': "📋 यात्रा सारांश", 'ta-IN': "📋 பயண சுருக்கம்", 'te-IN': "📋 యాత్ర సారాంశం",
+    'kn-IN': "📋 ಪ್ರಯಾಣ ಸಾರಾಂಶ", 'bn-IN': "📋 ভ্রমণ সারসংক্ষেপ", 'ar': "📋 ملخص الرحلة",
+    'zh-CN': "📋 行程摘要", 'fr': "📋 Résumé du voyage", 'de': "📋 Reisezusammenfassung",
+    'ru': "📋 Сводка поездки",
+  },
+  /* ── Flight type options ── */
+  opt_no_flight: {
+    'en-IN': "No Flight", 'hi-IN': "उड़ान नहीं", 'mr-IN': "उड्डाण नाही", 'gu-IN': "ফ্লাইট नहीं",
+    'ta-IN': "விமானம் இல்லை", 'te-IN': "విమానం వద్దు", 'kn-IN': "ವಿಮಾನ ಬೇಡ", 'bn-IN': "ফ্লাইট নেই",
+    'ar': "بدون طيران", 'zh-CN': "不乘机", 'fr': "Sans vol", 'de': "Kein Flug", 'ru': "Без перелёта",
+  },
+  opt_one_way: {
+    'en-IN': "One Way", 'hi-IN': "एकतरफा", 'mr-IN': "एकमार्गी", 'gu-IN': "एकतरफ",
+    'ta-IN': "ஒரு வழி", 'te-IN': "ఒకే దిశ", 'kn-IN': "ಒಂದು ದಿಕ್ಕು", 'bn-IN': "এক পথ",
+    'ar': "اتجاه واحد", 'zh-CN': "单程", 'fr': "Aller simple", 'de': "Einfach", 'ru': "В одну сторону",
+  },
+  opt_return: {
+    'en-IN': "Return", 'hi-IN': "वापसी", 'mr-IN': "परतावा", 'gu-IN': "पরत",
+    'ta-IN': "திரும்பி வருவது", 'te-IN': "రిటర్న్", 'kn-IN': "ಹಿಂತಿರುಗಿ", 'bn-IN': "রিটার্ন",
+    'ar': "ذهاب وعودة", 'zh-CN': "往返", 'fr': "Aller-retour", 'de': "Hin und zurück", 'ru': "Туда-обратно",
+  },
+  /* ── Voice error ── */
+  voice_error: {
+    'en-IN': "Voice input error. Please try again.",
+    'hi-IN': "वॉयस इनपुट में त्रुटि। कृपया पुनः प्रयास करें।",
+    'mr-IN': "व्हॉईस इनपुट त्रुटी. कृपया पुन्हा प्रयत्न करा.",
+    'gu-IN': "वॉइस इनपुट त्रुटि. कृपया फरी प्रयाস करो.",
+    'ta-IN': "குரல் உள்ளீட்டு பிழை. மீண்டும் முயற்சிக்கவும்.",
+    'te-IN': "వాయిస్ ఇన్‌పుట్ లోపం. దయచేసి మళ్ళీ ప్రయత్నించండి.",
+    'kn-IN': "ಧ್ವನಿ ಇನ್‌ಪುಟ್ ದೋಷ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    'bn-IN': "ভয়েস ইনপুট ত্রুটি। আবার চেষ্টা করুন।",
+    'ar': "خطأ في إدخال الصوت. يرجى المحاولة مجدداً.",
+    'zh-CN': "语音输入错误，请重试。",
+    'fr': "Erreur de saisie vocale. Veuillez réessayer.",
+    'de': "Fehler bei der Spracheingabe. Bitte erneut versuchen.",
+    'ru': "Ошибка голосового ввода. Пожалуйста, попробуйте снова.",
+  },
+  /* ── Day label in sightseeing ── */
+  lbl_day: {
+    'en-IN': "Day", 'hi-IN': "दिन", 'mr-IN': "दिवस", 'gu-IN': "दिवस",
+    'ta-IN': "நாள்", 'te-IN': "రోజు", 'kn-IN': "ದಿನ", 'bn-IN': "দিন",
+    'ar': "يوم", 'zh-CN': "第", 'fr': "Jour", 'de': "Tag", 'ru': "День",
+  },
+  opt_no_sightseeing: {
+    'en-IN': "— No Sightseeing —", 'hi-IN': "— कोई दर्शनीय स्थल नहीं —", 'mr-IN': "— पर्यटन नाही —",
+    'gu-IN': "— कोई स्थळ-दर्शन नहीं —", 'ta-IN': "— சுற்றுலா இல்லை —", 'te-IN': "— సైట్‌సీయింగ్ వద్దు —",
+    'kn-IN': "— ಪ್ರವಾಸ ಬೇಡ —", 'bn-IN': "— কোনো দর্শনীয় নেই —", 'ar': "— بدون جولات —",
+    'zh-CN': "— 无观光 —", 'fr': "— Pas de visite —", 'de': "— Keine Besichtigung —", 'ru': "— Без экскурсий —",
+  },
+  /* ── Sightseeing night hotel ── */
+  btn_add_night_hotel: {
+    'en-IN': "+ Night Hotel", 'hi-IN': "+ रात का होटल", 'mr-IN': "+ रात्रीचे हॉटेल",
+    'gu-IN': "+ रात्री होटल", 'ta-IN': "+ இரவு ஹோட்டல்", 'te-IN': "+ రాత్రి హోటల్",
+    'kn-IN': "+ ರಾತ್ರಿ ಹೋಟೆಲ್", 'bn-IN': "+ রাত্রির হোটেল", 'ar': "+ فندق ليلي",
+    'zh-CN': "+ 夜间酒店", 'fr': "+ Hôtel de nuit", 'de': "+ Nachthotel", 'ru': "+ Ночной отель",
+  },
+  btn_change_hotel: {
+    'en-IN': "🏨 Change Hotel", 'hi-IN': "🏨 होटल बदलें", 'mr-IN': "🏨 हॉटेल बदला",
+    'gu-IN': "🏨 होटल बदलो", 'ta-IN': "🏨 ஹோட்டல் மாற்று", 'te-IN': "🏨 హోటల్ మార్చు",
+    'kn-IN': "🏨 ಹೋಟೆಲ್ ಬದಲಾಯಿಸಿ", 'bn-IN': "🏨 হোটেল পরিবর্তন", 'ar': "🏨 تغيير الفندق",
+    'zh-CN': "🏨 更换酒店", 'fr': "🏨 Changer d'hôtel", 'de': "🏨 Hotel wechseln", 'ru': "🏨 Сменить отель",
+  },
+  lbl_hotel_for_night: {
+    'en-IN': "Hotel for Night", 'hi-IN': "रात के लिए होटल", 'mr-IN': "रात्रीसाठी हॉटेल",
+    'gu-IN': "रात मा होटल", 'ta-IN': "இரவிற்கான ஹோட்டல்", 'te-IN': "రాత్రికి హోటల్",
+    'kn-IN': "ರಾತ್ರಿಗೆ ಹೋಟೆಲ್", 'bn-IN': "রাতের হোটেল", 'ar': "فندق لليلة",
+    'zh-CN': "第...晚的酒店", 'fr': "Hôtel pour la nuit", 'de': "Hotel für Nacht", 'ru': "Отель на ночь",
+  },
+  opt_use_default_hotel: {
+    'en-IN': "— Use Default Hotel —", 'hi-IN': "— डिफ़ॉल्ट होटल उपयोग करें —", 'mr-IN': "— डिफॉल्ट हॉटेल वापरा —",
+    'gu-IN': "— डिफॉल्ट होटल वापरो —", 'ta-IN': "— இயல்புநிலை ஹோட்டல் பயன்படுத்து —",
+    'te-IN': "— డిఫాల్ట్ హోటల్ ఉపయోగించు —", 'kn-IN': "— ಡಿಫಾಲ್ಟ್ ಹೋಟೆಲ್ ಬಳಸಿ —",
+    'bn-IN': "— ডিফল্ট হোটেল ব্যবহার করুন —", 'ar': "— استخدام الفندق الافتراضي —",
+    'zh-CN': "— 使用默认酒店 —", 'fr': "— Utiliser l'hôtel par défaut —", 'de': "— Standardhotel verwenden —",
+    'ru': "— Использовать отель по умолчанию —",
+  },
+  opt_select_hotel_optional: {
+    'en-IN': "— Select Hotel (optional) —", 'hi-IN': "— होटल चुनें (वैकल्पिक) —",
+    'mr-IN': "— हॉटेल निवडा (ऐच्छिक) —", 'gu-IN': "— होटल पसंद करो (ऐच्छिक) —",
+    'ta-IN': "— ஹோட்டல் தேர்ந்தெடுக்கவும் (விருப்பமானது) —", 'te-IN': "— హోటల్ ఎంచుకోండి (ఐచ్ఛికం) —",
+    'kn-IN': "— ಹೋಟೆಲ್ ಆಯ್ಕೆ ಮಾಡಿ (ಐಚ್ಛಿಕ) —", 'bn-IN': "— হোটেল নির্বাচন করুন (ঐচ্ছিক) —",
+    'ar': "— اختر فندقاً (اختياري) —", 'zh-CN': "— 选择酒店（可选）—",
+    'fr': "— Sélectionner un hôtel (optionnel) —", 'de': "— Hotel auswählen (optional) —",
+    'ru': "— Выберите отель (необязательно) —",
+  },
+  lbl_kasol_sharing: {
+    'en-IN': "Sharing Type for Kasol Hotel:", 'hi-IN': "कसोल होटल के लिए शेयरिंग प्रकार:",
+    'mr-IN': "कसोल हॉटेलसाठी शेअरिंग प्रकार:", 'gu-IN': "कसोल होटल के लिए शेरिंग प्रकार:",
+    'ta-IN': "கசோல் ஹோட்டலுக்கான பகிர்வு வகை:", 'te-IN': "కసోల్ హోటల్‌కు షేరింగ్ రకం:",
+    'kn-IN': "ಕಸೋಲ್ ಹೋಟೆಲ್‌ಗೆ ಶೇರಿಂಗ್ ವಿಧ:", 'bn-IN': "কাসোল হোটেলের শেয়ারিং ধরন:",
+    'ar': "نوع الإقامة المشتركة لفندق كاسول:", 'zh-CN': "卡索尔酒店共享类型：",
+    'fr': "Type de partage pour l'hôtel de Kasol :", 'de': "Sharing-Typ für Kasol-Hotel:",
+    'ru': "Тип совместного проживания для отеля Касол:",
+  },
+  /* ── Flow completed ── */
+  flow_completed: {
+    'en-IN': "Flow completed!", 'hi-IN': "प्रवाह पूर्ण!", 'mr-IN': "प्रवाह पूर्ण!",
+    'gu-IN': "फ्लो पूर्ण!", 'ta-IN': "ஓட்டம் முடிந்தது!", 'te-IN': "ఫ్లో పూర్తయింది!",
+    'kn-IN': "ಫ್ಲೋ ಪೂರ್ಣ!", 'bn-IN': "ফ্লো সম্পন্ন!", 'ar': "اكتمل التدفق!",
+    'zh-CN': "流程完成！", 'fr': "Flux terminé !", 'de': "Ablauf abgeschlossen!", 'ru': "Поток завершён!",
   },
 };
 
+/* ----------------------------------------------------------
+   T() — Translation helper. Falls back to English.
+   Usage: T('ask_destination')  or  T('opt_domestic')
+   ---------------------------------------------------------- */
+function T(key) {
+    const lang = window.selectedLanguageCode || 'en-IN';
+    const dict = TRANSLATIONS[key];
+    if(!dict) return key; // unknown key — return key as fallback
+    return dict[lang] || dict['en-IN'] || key;
+}
+
+/* ----------------------------------------------------------
+   changeLanguage() — called from both desktop #langSelect
+   and mobile #mobileLangSelect dropdowns.
+   Updates:
+     1. window.selectedLanguageCode / window.selectedLanguageName
+     2. Static UI elements (placeholder, send button, trip summary btn)
+     3. AI conversation context so backend responds in new language
+     4. Persists in sessionStorage
+   Does NOT re-render current step (T() is always read fresh).
+   ---------------------------------------------------------- */
 function changeLanguage(langCode) {
     window.selectedLanguageCode = langCode;
     window.selectedLanguageName = LANGUAGE_NAMES[langCode] || 'English';
 
-    // Update voice recognition language
-    if(recognition && isListening) {
+    // Stop any active voice recognition
+    if(typeof recognition !== 'undefined' && isListening) {
         recognition.stop();
     }
 
-    // Update UI text
-    const t = UI_TRANSLATIONS[langCode] || UI_TRANSLATIONS['en-IN'];
-
+    // ── Update static UI elements ──────────────────────────────
     const aiInputEl = document.getElementById('aiInput');
-    if(aiInputEl) aiInputEl.placeholder = t.placeholder;
+    if(aiInputEl) aiInputEl.placeholder = T('ai_placeholder');
 
     const aiInputBtn = document.getElementById('aiInputBtn');
-    if(aiInputBtn) aiInputBtn.textContent = t.send;
+    if(aiInputBtn) aiInputBtn.textContent = T('btn_send');
 
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if(sidebarToggle) sidebarToggle.textContent = t.tripSummary;
+    const tripSummaryBtn = document.getElementById('tripSummaryBtn');
+    if(tripSummaryBtn) tripSummaryBtn.innerHTML = T('trip_summary');
 
-    const summarySidebar = document.querySelector('#sidebar .summary');
-    if(summarySidebar && summarySidebar.innerHTML.trim().startsWith('Waiting') || 
-       (summarySidebar && !window.lastCalculation)) {
-        // Don't change dynamic content
+    const tsmTitle = document.getElementById('tsmTitle');
+    if(tsmTitle) tsmTitle.textContent = T('trip_summary');
+
+    // ── Re-render current step options in new language ─────────
+    // We only re-render the OPTIONS (buttons/selectors), not the bot message,
+    // to avoid duplicate messages when language changes mid-flow.
+    if(typeof currentStep !== 'undefined' && typeof optionsContainer !== 'undefined') {
+        if(currentStep > 0) {
+            // Set a flag so renderXxx functions skip addBot() calls
+            window._langSwitchRerender = true;
+            optionsContainer.innerHTML = '';
+            renderStep();
+            window._langSwitchRerender = false;
+        }
     }
 
-    // Persist in session for AI responses
+    // ── Persist ────────────────────────────────────────────────
     sessionStorage.setItem('selectedLanguage', langCode);
 
-    // Inform AI of language change via a system message in conversation
+    // ── Inform AI of language change ───────────────────────────
+    // Strip old language instructions first
+    if(!Array.isArray(window.conversationHistory)) window.conversationHistory = [];
+    window.conversationHistory = window.conversationHistory.filter(
+        h => !h.content.includes('[Language changed')
+    );
     if(langCode !== 'en-IN') {
-        const langMsg = `[Language changed to ${window.selectedLanguageName}. Please respond in ${window.selectedLanguageName} from now on.]`;
-        window.conversationHistory.push({role:'user', content: langMsg});
-        window.conversationHistory.push({role:'assistant', content: `Understood! I'll respond in ${window.selectedLanguageName} now. 😊`});
-    } else {
-        // Remove any language override messages
-        window.conversationHistory = window.conversationHistory.filter(
-            h => !h.content.includes('[Language changed')
-        );
+        window.conversationHistory.push({role:'user', content: `[Language changed to ${window.selectedLanguageName}. Please respond in ${window.selectedLanguageName} from now on. All greetings, explanations, confirmations, and responses must be in ${window.selectedLanguageName}.]`});
+        window.conversationHistory.push({role:'assistant', content: `Understood! I'll respond in ${window.selectedLanguageName} from now on. 😊`});
     }
 }
+
+/* ----------------------------------------------------------
+   syncMobileLang() — syncs mobile bottom-bar language selector
+   with desktop selector and vice-versa.
+   ---------------------------------------------------------- */
+function syncMobileLang(langCode) {
+    const desktopSel = document.getElementById('langSelect');
+    if(desktopSel && desktopSel.value !== langCode) desktopSel.value = langCode;
+    changeLanguage(langCode);
+}
+
+/* Desktop langSelect already has onchange="changeLanguage(this.value)" in HTML */
 
 // Restore language preference from session
 (function restoreLanguage(){
     const saved = sessionStorage.getItem('selectedLanguage');
-    if(saved) {
-        const sel = document.getElementById('langSelect');
-        if(sel) sel.value = saved;
-        changeLanguage(saved);
+    if(saved && saved !== 'en-IN') {
+        window.selectedLanguageCode = saved;
+        window.selectedLanguageName = LANGUAGE_NAMES[saved] || 'English';
+        const desktopSel = document.getElementById('langSelect');
+        if(desktopSel) desktopSel.value = saved;
+        const mobileSel = document.getElementById('mobileLangSelect');
+        if(mobileSel) mobileSel.value = saved;
+        // Update static elements immediately
+        const aiInputEl = document.getElementById('aiInput');
+        if(aiInputEl) aiInputEl.placeholder = T('ai_placeholder');
+        const aiInputBtn = document.getElementById('aiInputBtn');
+        if(aiInputBtn) aiInputBtn.textContent = T('btn_send');
+        const tripSummaryBtn = document.getElementById('tripSummaryBtn');
+        if(tripSummaryBtn) tripSummaryBtn.innerHTML = T('trip_summary');
     }
 })();
 
