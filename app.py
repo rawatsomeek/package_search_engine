@@ -242,10 +242,28 @@ _log_ai_provider_status()
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 CORS(app)
 
+# =====================================================
+# DATABASE
+# =====================================================
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+def get_db():
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL not set in environment variables")
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+    try:
+        conn.cursor().execute("SET statement_timeout = '8000'")
+        conn.commit()
+    except Exception:
+        pass
+    return conn
+
 
 # =====================================================
 # AUTO DB INIT — Run schema.sql on startup
 # =====================================================
+# Placed HERE — after get_db() is defined — so it can call it.
 # Ensures all tables exist on every deploy (local + Render).
 # Completely safe to run repeatedly — schema uses IF NOT EXISTS.
 # Fixes "relation does not exist" errors on fresh Render deployments.
@@ -265,27 +283,11 @@ def _auto_init_db():
         db.commit()
         db.close()
         logger.info("✅ DB auto-init complete — all tables verified")
-    except Exception as e:
-        logger.error(f"DB auto-init failed: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"DB auto-init failed: {exc}", exc_info=True)
 
 _auto_init_db()
 
-# =====================================================
-# DATABASE
-# =====================================================
-
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-def get_db():
-    if not DATABASE_URL:
-        raise Exception("DATABASE_URL not set in environment variables")
-    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
-    try:
-        conn.cursor().execute("SET statement_timeout = '8000'")
-        conn.commit()
-    except Exception:
-        pass
-    return conn
 
 def row_to_dict(cursor, row):
     if row is None:
