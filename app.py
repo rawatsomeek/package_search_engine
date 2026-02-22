@@ -1559,13 +1559,20 @@ def _send_email_notification(to_address: str, subject: str, html_body: str) -> b
     smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
     smtp_port = int(os.environ.get('SMTP_PORT', 587))
     smtp_user = os.environ.get('SMTP_USER', '').strip()
-    smtp_pass = os.environ.get('SMTP_PASSWORD', '').strip()
+    # Remove ALL whitespace from App Password (Render may add spaces)
+    smtp_pass = os.environ.get('SMTP_PASSWORD', '').strip().replace(' ', '')
     from_email = os.environ.get('FROM_EMAIL', smtp_user).strip() or smtp_user
 
+    logger.info(
+        f"SMTP attempt — host={smtp_host} port={smtp_port} "
+        f"user={smtp_user!r} pass_len={len(smtp_pass)} to={to_address!r}"
+    )
+
     if not smtp_user or not smtp_pass:
-        logger.warning(
-            "SMTP credentials not configured — email not sent. "
-            "Set SMTP_USER and SMTP_PASSWORD env vars."
+        logger.error(
+            f"SMTP credentials missing — SMTP_USER={smtp_user!r} "
+            f"SMTP_PASSWORD configured={bool(smtp_pass)}. "
+            "Set both in Render Environment dashboard."
         )
         return False
 
@@ -1583,17 +1590,23 @@ def _send_email_notification(to_address: str, subject: str, html_body: str) -> b
             server.login(smtp_user, smtp_pass)
             server.sendmail(from_email, [to_address], msg.as_string())
 
-        logger.info(f"Email sent to {to_address}: {subject}")
+        logger.info(f"Email successfully sent to {to_address}: {subject}")
         return True
 
-    except _smtplib.SMTPAuthenticationError:
+    except _smtplib.SMTPAuthenticationError as exc:
         logger.error(
-            "SMTP authentication failed. Use an App Password for Gmail: "
-            "myaccount.google.com/apppasswords"
+            f"SMTP authentication failed for user={smtp_user!r}: {exc}. "
+            "Check App Password at myaccount.google.com/apppasswords"
         )
         return False
+    except _smtplib.SMTPRecipientsRefused as exc:
+        logger.error(f"SMTP recipient refused {to_address!r}: {exc}")
+        return False
+    except _smtplib.SMTPException as exc:
+        logger.error(f"SMTP protocol error sending to {to_address!r}: {exc}", exc_info=True)
+        return False
     except Exception as exc:
-        logger.error(f"Email send failed to {to_address}: {exc}", exc_info=True)
+        logger.error(f"Unexpected email error sending to {to_address!r}: {exc}", exc_info=True)
         return False
 
 
@@ -1734,6 +1747,58 @@ def _build_rejection_email_for_user(req: dict, note: str = '') -> str:
 OWNER_EMAIL = 'rawatsomeek@gmail.com'
 ADMIN_REQUEST_EXPIRY_HOURS = 48
 RESET_TOKEN_EXPIRY_HOURS   = 2
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SMTP TEST ROUTE — Owner-only diagnostic. Visit /admin/test-email to verify.
+# Remove this route after confirming email works in production.
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route('/admin/test-email', methods=['GET'])
+def admin_test_email():
+    """Quick SMTP diagnostic — sends a test email to the owner and returns result."""
+    import smtplib as _smtplib_test
+    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '').strip()
+    smtp_pass = os.environ.get('SMTP_PASSWORD', '').strip().replace(' ', '')
+    app_url   = os.environ.get('APP_URL', 'not set')
+
+    diag = {
+        'smtp_host':  smtp_host,
+        'smtp_port':  smtp_port,
+        'smtp_user':  smtp_user,
+        'smtp_pass_len': len(smtp_pass),
+        'smtp_pass_set': bool(smtp_pass),
+        'app_url':    app_url,
+        'owner_email': OWNER_EMAIL,
+    }
+
+    if not smtp_user or not smtp_pass:
+        return jsonify({'status': 'error', 'reason': 'SMTP credentials missing', 'diag': diag}), 500
+
+    try:
+        with _smtplib_test.SMTP(smtp_host, smtp_port, timeout=10) as s:
+            s.ehlo()
+            s.starttls()
+            s.ehlo()
+            s.login(smtp_user, smtp_pass)
+            body = (f"This is a test email from Global Calc.\n\n"
+                    f"SMTP works correctly.\n"
+                    f"APP_URL: {app_url}\n"
+                    f"Sent from: {smtp_user}")
+            from email.mime.text import MIMEText as _MT
+            msg = _MT(body, 'plain')
+            msg['Subject'] = '[Global Calc] SMTP Test Email'
+            msg['From']    = smtp_user
+            msg['To']      = OWNER_EMAIL
+            s.sendmail(smtp_user, [OWNER_EMAIL], msg.as_string())
+        logger.info(f"Test email sent to {OWNER_EMAIL}")
+        return jsonify({'status': 'success', 'message': f'Test email sent to {OWNER_EMAIL}', 'diag': diag})
+    except _smtplib_test.SMTPAuthenticationError as exc:
+        return jsonify({'status': 'auth_failed', 'error': str(exc), 'diag': diag}), 500
+    except Exception as exc:
+        return jsonify({'status': 'error', 'error': str(exc), 'diag': diag}), 500
 
 
 @app.route('/admin/setup-page', methods=['GET'])
