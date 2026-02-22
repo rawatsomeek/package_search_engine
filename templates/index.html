@@ -669,10 +669,22 @@ header::after{
 .flightReturnLeg .frl-title{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:rgba(168,85,247,0.8);margin-bottom:0.5rem}
 
 /* =====================================================
-   MOBILE SIDEBAR TOGGLE
+   MOBILE BOTTOM ACTION BAR (replaces floating toggle)
    ===================================================== */
-#sidebarToggle{
+#mobileBottomBar{
   display:none;
+  position:fixed;bottom:0;left:0;right:0;z-index:490;
+  background:rgba(10,10,20,0.95);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid rgba(102,126,234,0.25);
+  padding:0.5rem 1rem 0.6rem;
+  align-items:center;justify-content:space-between;
+  gap:0.5rem;
+  safe-area-inset-bottom:env(safe-area-inset-bottom);
+  padding-bottom:calc(0.6rem + env(safe-area-inset-bottom));
+}
+#sidebarToggle{
+  display:none; /* hidden — replaced by #mobileBottomBar on mobile */
   position:fixed;bottom:80px;right:16px;z-index:500;
   width:auto;min-width:52px;height:44px;border-radius:22px;border:none;
   background:var(--primary-gradient);color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;
@@ -681,11 +693,46 @@ header::after{
   padding:0 14px;white-space:nowrap;letter-spacing:0.02em;
   -webkit-tap-highlight-color:transparent;
 }
+#tripSummaryBtn{
+  flex:1;height:40px;border-radius:20px;border:none;
+  background:var(--primary-gradient);color:#fff;font-size:0.78rem;font-weight:700;
+  cursor:pointer;box-shadow:0 2px 12px rgba(102,126,234,0.4);
+  display:flex;align-items:center;justify-content:center;gap:0.3rem;
+  padding:0 14px;white-space:nowrap;letter-spacing:0.02em;
+  -webkit-tap-highlight-color:transparent;max-width:180px;
+}
+#mobileLangSelect{
+  height:40px;padding:0 0.5rem;border-radius:10px;
+  border:1px solid rgba(255,255,255,0.2);
+  background:rgba(255,255,255,0.08);
+  color:#fff;font-size:0.72rem;font-weight:600;cursor:pointer;
+  -webkit-appearance:none;appearance:none;font-family:inherit;
+  min-width:90px;max-width:110px;text-align:center;
+}
+#mobileLangSelect option{background:#1a1a2e;color:#fff;}
+
 #mobileSidebarOverlay{
   display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,0.5);z-index:400;backdrop-filter:blur(5px);
+  background:rgba(0,0,0,0.65);z-index:440;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
 }
 #mobileSidebarOverlay.show{display:block}
+
+/* =====================================================
+   MOBILE TRIP SUMMARY BOTTOM SHEET
+   ===================================================== */
+@media (max-width:768px){
+  #mobileBottomBar{display:flex}
+
+  /* Push chatbot content up so it doesn't hide behind bottom bar */
+  #chatbotContainer{
+    padding-bottom:calc(1rem + 56px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Sidebar as a proper bottom sheet */
+  #sidebar{
+    bottom:calc(56px + env(safe-area-inset-bottom)) !important;
+  }
+}
 
 /* =====================================================
    SCROLLBAR
@@ -717,15 +764,17 @@ header::after{
     width:100%;border-radius:0;border:none;border-bottom:1px solid var(--glass-border);
     max-height:none;height:auto;min-height:calc(100vh - 64px);
     padding:1rem;
+    /* Space at bottom for the fixed bottom bar */
+    padding-bottom:calc(1rem + 56px + env(safe-area-inset-bottom));
   }
   #sidebar{
     display:none;
-    position:fixed;bottom:0;left:0;right:0;z-index:450;
+    position:fixed;bottom:calc(56px + env(safe-area-inset-bottom));left:0;right:0;z-index:450;
     width:100%;max-height:78vh;height:auto;
     border-radius:20px 20px 0 0;
     border-top:1px solid rgba(102,126,234,0.3);
     border-left:none;border-right:none;border-bottom:none;
-    padding:1.25rem 1rem 2.5rem;
+    padding:1.25rem 1rem 1.5rem;
     /* Fully opaque — no bleed-through on mobile */
     background:#0d0d1a;
     overflow-y:auto;
@@ -741,12 +790,13 @@ header::after{
   }
   #mobileSidebarOverlay{
     z-index:449;
-    background:rgba(0,0,0,0.6);
+    background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
   }
-  #sidebarToggle{display:flex}
+  /* sidebarToggle hidden — replaced by #mobileBottomBar */
+  #sidebarToggle{display:none !important}
   #sidebarDragHandle{display:block !important}
-  #messages{min-height:250px;max-height:45vh}
-  #optionsContainer{max-height:35vh}
+  #messages{min-height:250px;max-height:42vh}
+  #optionsContainer{max-height:33vh}
   .dualSelectorContainer{flex-direction:column;gap:1.25rem;padding:1rem}
   .selectorColumn{width:100%}
   .horizontalScroll{width:100%}
@@ -754,6 +804,10 @@ header::after{
   .liveHotelSearchGrid{grid-template-columns:1fr}
   .liveHotelModalBox{padding:1.25rem;border-radius:16px}
   .flightDetailGrid{grid-template-columns:1fr}
+  /* aiQuickBar chips wrap cleanly */
+  #aiQuickBar{flex-wrap:wrap;gap:0.35rem;padding:0.4rem 0 0.2rem}
+  .qchip{font-size:0.68rem;padding:0.2rem 0.55rem}
+  #aiStatusBadge{font-size:0.6rem;padding:0.15rem 0.45rem}
   /* Ensure summary content is readable on solid dark background */
   #sidebar .summary{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1)}
 }
@@ -762,7 +816,7 @@ header::after{
 @media (max-width:480px){
   header{padding:0.875rem}
   .admin-link{padding:6px 8px;font-size:9px;border-radius:6px}
-  #chatbotContainer{padding:0.75rem}
+  #chatbotContainer{padding:0.75rem;padding-bottom:calc(0.75rem + 56px + env(safe-area-inset-bottom))}
   #messages{padding:0.875rem;gap:0.625rem;min-height:200px;max-height:40vh}
   #optionsContainer{max-height:30vh}
   .botMessage,.userMessage{max-width:90%;padding:0.75rem 0.875rem}
@@ -771,7 +825,6 @@ header::after{
   #aiInput{padding:0.75rem 0.875rem;font-size:0.8rem}
   #aiInputBtn{padding:0.75rem 0.875rem;font-size:0.8rem}
   #voiceBtn{width:40px;height:40px;min-width:40px}
-  #langSelectorBar{bottom:140px;right:8px}
   .counterSelectorContainer{padding:1rem}
   .counterBtn{width:40px;height:40px}
   .counterValue{font-size:1.25rem}
@@ -817,8 +870,8 @@ header::after{
 }
 #langSelect option{background:#1a1a2e;color:#fff;}
 @media(max-width:768px){
-  #langSelectorBar{top:auto;bottom:134px;right:16px;padding:0;}
-  #langSelect{font-size:0.68rem;padding:0.3rem 0.5rem;}
+  /* Hidden on mobile — language moved to #mobileBottomBar */
+  #langSelectorBar{display:none !important;}
 }
 </style>
 </head>
@@ -830,9 +883,31 @@ header::after{
   <a href="/admin" id="adminPanelBtn" title="Admin Panel" style="padding:0.625rem 0.875rem;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);color:#fff;cursor:pointer;transition:all 0.3s;font-weight:600;font-size:0.75rem;min-height:44px;display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;">Admin</a>
 </div>
 
-<!-- Mobile sidebar toggle -->
-<button id="sidebarToggle" onclick="toggleMobileSidebar()" aria-label="Toggle trip summary">📋 Trip Summary</button>
+<!-- Mobile sidebar toggle (kept for JS compatibility, hidden visually) -->
+<button id="sidebarToggle" onclick="toggleMobileSidebar()" aria-label="Toggle trip summary" style="display:none">📋 Trip Summary</button>
 <div id="mobileSidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
+<!-- Mobile Bottom Action Bar — replaces floating buttons on mobile -->
+<div id="mobileBottomBar" aria-label="Mobile actions bar">
+  <button id="tripSummaryBtn" onclick="toggleMobileSidebar()" aria-label="View Trip Summary">
+    📋 Trip Summary
+  </button>
+  <select id="mobileLangSelect" onchange="syncMobileLang(this.value)" title="Select language" aria-label="Language">
+    <option value="en-IN">🇮🇳 English</option>
+    <option value="hi-IN">🇮🇳 हिन्दी</option>
+    <option value="mr-IN">🇮🇳 मराठी</option>
+    <option value="gu-IN">🇮🇳 ગુજરાતી</option>
+    <option value="ta-IN">🇮🇳 தமிழ்</option>
+    <option value="te-IN">🇮🇳 తెలుగు</option>
+    <option value="kn-IN">🇮🇳 ಕನ್ನಡ</option>
+    <option value="bn-IN">🇮🇳 বাংলা</option>
+    <option value="ar">🌍 العربية</option>
+    <option value="zh-CN">🇨🇳 中文</option>
+    <option value="fr">🇫🇷 Français</option>
+    <option value="de">🇩🇪 Deutsch</option>
+    <option value="ru">🇷🇺 Русский</option>
+  </select>
+</div>
 
 <!-- LIVE HOTEL SEARCH MODAL -->
 <!-- ============================================================
@@ -1113,6 +1188,15 @@ function toggleMobileSidebar(){
         overlay.classList.add('show');
         closeBtn.style.display = 'block';
     }
+}
+
+/* ============================================================
+   SYNC MOBILE LANG SELECT → main langSelect
+   ============================================================ */
+function syncMobileLang(val){
+  const mainSel = document.getElementById('langSelect');
+  if(mainSel) mainSel.value = val;
+  changeLanguage(val);
 }
 
 window.addEventListener('resize', ()=>{
