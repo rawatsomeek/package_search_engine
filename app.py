@@ -270,21 +270,120 @@ def get_db():
 # =====================================================
 
 def _auto_init_db():
-    """Run schema.sql on startup if tables are missing. Safe — uses IF NOT EXISTS."""
+    """
+    Ensure all required tables exist on startup.
+    Strategy:
+      1. Try to run schema.sql if present (full schema).
+      2. Always run the embedded CRITICAL_TABLES SQL regardless —
+         this guarantees admin_users and admin_requests exist even
+         when schema.sql is missing from the deployment (e.g. Render Docker).
+    Safe to run on every startup — all statements use IF NOT EXISTS.
+    """
+
+    # ── Critical tables embedded directly so they always get created ──────────
+    # These are the minimum tables needed for login + request-access to work.
+    # All other tables are created via schema.sql below.
+    CRITICAL_TABLES_SQL = """
+        CREATE TABLE IF NOT EXISTS clients (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(150) NOT NULL,
+            code VARCHAR(30) NOT NULL,
+            contact_email VARCHAR(200),
+            contact_phone VARCHAR(30),
+            currency_default VARCHAR(10) NOT NULL DEFAULT 'INR',
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO clients (id, name, code, currency_default)
+        VALUES (1, 'AKS Hospitality', 'aks-hospitality', 'INR')
+        ON CONFLICT (id) DO NOTHING;
+
+        CREATE TABLE IF NOT EXISTS admin_users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            password_hash VARCHAR(255),
+            pin_hash VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS webauthn_credentials (
+            id SERIAL PRIMARY KEY,
+            admin_user_id INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+            credential_id BYTEA NOT NULL UNIQUE,
+            public_key BYTEA NOT NULL,
+            sign_count INTEGER NOT NULL DEFAULT 0,
+            device_name VARCHAR(100),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS admin_requests (
+            id SERIAL PRIMARY KEY,
+            request_type VARCHAR(20) NOT NULL DEFAULT 'signup'
+                CHECK (request_type IN ('signup', 'forgot_password', 'forgot_username')),
+            username VARCHAR(100),
+            password_hash VARCHAR(255),
+            pin_hash VARCHAR(255),
+            company VARCHAR(200),
+            email VARCHAR(200) NOT NULL,
+            full_name VARCHAR(200),
+            phone VARCHAR(30),
+            status VARCHAR(20) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'approved', 'rejected', 'expired')),
+            approve_token VARCHAR(128) NOT NULL UNIQUE,
+            reject_token  VARCHAR(128) NOT NULL UNIQUE,
+            reset_token   VARCHAR(128) UNIQUE,
+            reset_token_expires_at TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL,
+            processed_at TIMESTAMP,
+            owner_note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_admin_users_username
+            ON admin_users(username);
+        CREATE INDEX IF NOT EXISTS idx_admin_requests_approve_token
+            ON admin_requests(approve_token);
+        CREATE INDEX IF NOT EXISTS idx_admin_requests_reject_token
+            ON admin_requests(reject_token);
+        CREATE INDEX IF NOT EXISTS idx_admin_requests_email
+            ON admin_requests(email);
+        CREATE INDEX IF NOT EXISTS idx_admin_requests_status
+            ON admin_requests(status);
+    """
+
     try:
-        schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
-        if not os.path.exists(schema_path):
-            logger.warning("schema.sql not found — skipping auto-init")
-            return
         db = get_db()
         cur = db.cursor()
-        with open(schema_path, 'r') as f:
-            cur.execute(f.read())
+
+        # Step 1 — always run critical tables (guaranteed, no file dependency)
+        cur.execute(CRITICAL_TABLES_SQL)
         db.commit()
+        logger.info("✅ DB critical tables verified (admin_users, admin_requests)")
+
+        # Step 2 — try full schema.sql if it exists alongside app.py
+        schema_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schema.sql')
+        if os.path.exists(schema_path):
+            with open(schema_path, 'r') as f:
+                cur.execute(f.read())
+            db.commit()
+            logger.info("✅ DB full schema.sql applied successfully")
+        else:
+            logger.warning(
+                "schema.sql not found at %s — only critical tables were created. "
+                "Deploy schema.sql alongside app.py for full schema initialisation.",
+                schema_path
+            )
+
         db.close()
-        logger.info("✅ DB auto-init complete — all tables verified")
+        logger.info("✅ DB auto-init complete — all required tables verified")
+
     except Exception as exc:
         logger.error(f"DB auto-init failed: {exc}", exc_info=True)
+
 
 _auto_init_db()
 
