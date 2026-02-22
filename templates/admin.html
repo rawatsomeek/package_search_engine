@@ -1164,18 +1164,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="form-grid">
                     <div class="form-group"><label>Region <span class="req">*</span></label><select name="region_id" required id="transportRegion"></select></div>
                     <div class="form-group"><label>Transport Name <span class="req">*</span></label><input type="text" name="name" required placeholder="Volvo AC Bus"></div>
-                    <div class="form-group">
-                        <label>Trip Type <span class="req">*</span></label>
-                        <select name="trip_type" id="transportTripType" required onchange="onTripTypeChange('transportTripType','transportReturnMultiplierGrp')">
-                            <option value="">Select Trip Type</option>
-                            <option value="one_way">One Way</option>
-                            <option value="return">Return</option>
-                        </select>
-                    </div>
-                    <div class="form-group multiplier-group hidden-field" id="transportReturnMultiplierGrp">
-                        <label>Return Rate Multiplier <span class="req">*</span></label>
-                        <input type="number" step="0.01" name="return_rate_multiplier" id="transportReturnMultiplier" value="1.8" min="0" placeholder="1.8">
-                    </div>
                 </div>
                 <div class="rate-grid">
                     <div class="rate-section">
@@ -1213,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="filter-btn" data-filter="domestic" onclick="setRegionFilter('domestic')">🇮🇳 Domestic</button>
                 <button class="filter-btn" data-filter="international" onclick="setRegionFilter('international')">🌎 International</button>
             </div>
-            <div class="table-container"><table id="transportsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Trip Type</th><th>Return Mult.</th><th>Peak Adult</th><th>Peak Child</th><th>Peak Type</th><th>Off Adult</th><th>Off Child</th><th>Off Type</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+            <div class="table-container"><table id="transportsTable"><thead><tr><th>ID</th><th>Region</th><th>Name</th><th>Peak Adult</th><th>Peak Child</th><th>Peak Type</th><th>Off Adult</th><th>Off Child</th><th>Off Type</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 
@@ -1701,7 +1689,7 @@ async function toggleEntity(type, id, active) {
     // Map API type to the in-memory array and re-render function for targeted update
     const typeMap = {
         'clients':       { arr: () => allClients,      set: v => { allClients = v; },      render: displayClients },
-        'regions':       { arr: () => allRegions,       set: v => { allRegions = v; },       render: displayRegions },
+        'regions':       { arr: () => allRegions,       set: v => { allRegions = v; },       render: () => { displayRegions(); updateRegionSelects(); } },
         'transports':    { arr: () => allTransports,    set: v => { allTransports = v; },    render: displayTransports },
         'hotels':        { arr: () => allHotels,        set: v => { allHotels = v; },        render: displayHotels },
         'destinations':  { arr: () => allDestinations,  set: v => { allDestinations = v; },  render: displayDestinations },
@@ -1848,18 +1836,14 @@ function displayTransports() {
     const filtered = allTransports.filter(t => matchesRegionFilter(t));
     const tb=document.querySelector('#transportsTable tbody');
     if (filtered.length === 0) {
-        tb.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#999;padding:24px">No transports found for selected filter</td></tr>';
+        tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999;padding:24px">No transports found for selected filter</td></tr>';
         return;
     }
     tb.innerHTML=filtered.map(t=>{
         const r=getRegionById(t.region_id);
         const regionBadge = r ? (r.is_domestic ? ' 🇮🇳' : ' 🌎') : '';
-        const tripType = t.trip_type || 'one_way';
-        const retMult = (tripType !== 'one_way' && t.return_rate_multiplier != null) ? t.return_rate_multiplier : '-';
         return `<tr class="${t.active?'':'inactive'}" id="transport-row-${t.id}">
         <td>${t.id}</td><td>${r?r.name:'-'}${regionBadge}</td><td>${t.name}</td>
-        <td><span class="badge badge-domestic">${tripType}</span></td>
-        <td>${retMult}</td>
         <td>${t.adult_rate_peak}</td><td>${t.child_rate_peak}</td><td>${t.peak_pricing_type||'per_person'}</td>
         <td>${t.adult_rate_off}</td><td>${t.child_rate_off}</td><td>${t.off_pricing_type||'per_person'}</td>
         <td><span class="badge ${t.active?'badge-active':'badge-inactive'}">${t.active?'Active':'Inactive'}</span></td>
@@ -1873,25 +1857,11 @@ function displayTransports() {
 
 document.getElementById('transportForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const tripTypeVal = document.getElementById('transportTripType').value;
-    if (!tripTypeVal) { showMsg('Please select a Trip Type', 'error'); return; }
-
-    const multInput = document.getElementById('transportReturnMultiplier');
-    let returnMultiplier = parseFloat(multInput.value);
-
-    if (tripTypeVal === 'one_way') {
-        returnMultiplier = 1.0;
-    } else {
-        if (isNaN(returnMultiplier)) { showMsg('Return Rate Multiplier must be a number', 'error'); return; }
-    }
-
     try {
         const d=Object.fromEntries(new FormData(e.target));
         d.client_id=currentClientId;
-        d.trip_type = tripTypeVal;
-        d.return_rate_multiplier = returnMultiplier;
         const res=await fetch(`${API}/api/transports`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
-        if(res.ok){showMsg('Transport created');e.target.reset();document.getElementById('transportReturnMultiplierGrp').classList.add('hidden-field');await loadTransports();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
+        if(res.ok){showMsg('Transport created');e.target.reset();await loadTransports();}else{const err=await res.json();showMsg(err.error||'Failed','error');}
     } catch (e) {
         console.error('Create transport error:', e);
         showMsg('Failed to create transport', 'error');
@@ -1904,23 +1874,9 @@ function editTransport(id) {
     currentEditItem = t;
     currentEditType = 'transport';
 
-    const tripType = t.trip_type || 'one_way';
-    const retMult = t.return_rate_multiplier != null ? t.return_rate_multiplier : 1.8;
-    const isOneWay = tripType === 'one_way';
-
     document.getElementById('editModalBody').innerHTML = `
         <div class="form-grid">
             <div class="form-group"><label>Transport Name</label><input type="text" id="editTransName" value="${t.name}"></div>
-            <div class="form-group"><label>Trip Type <span class="req">*</span></label>
-                <select id="editTransTripType" onchange="onTripTypeChange('editTransTripType','editTransMultGrp')">
-                    <option value="one_way" ${tripType==='one_way'?'selected':''}>One Way</option>
-                    <option value="return" ${tripType==='return'?'selected':''}>Return</option>
-                </select>
-            </div>
-            <div class="form-group multiplier-group ${isOneWay ? 'hidden-field' : ''}" id="editTransMultGrp">
-                <label>Return Rate Multiplier</label>
-                <input type="number" step="0.01" id="editTransReturnMult" value="${retMult}" min="0">
-            </div>
             <div class="form-group"><label>Peak Adult Rate</label><input type="number" step="0.01" id="editTransPeakAdult" value="${t.adult_rate_peak}"></div>
             <div class="form-group"><label>Peak Child Rate</label><input type="number" step="0.01" id="editTransPeakChild" value="${t.child_rate_peak}"></div>
             <div class="form-group"><label>Peak Pricing Type</label>
@@ -2459,18 +2415,8 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
             await fetch(`${API}/api/regions/${currentEditItem.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
             showMsg('Region updated');closeModal();await loadRegions();
         } else if(currentEditType==='transport'){
-            const tripTypeVal = document.getElementById('editTransTripType').value;
-            if (!tripTypeVal) { showMsg('Please select a Trip Type', 'error'); return; }
-            let returnMultiplier = parseFloat(document.getElementById('editTransReturnMult').value);
-            if (tripTypeVal === 'one_way') {
-                returnMultiplier = 1.0;
-            } else {
-                if (isNaN(returnMultiplier)) { showMsg('Return Rate Multiplier must be a number', 'error'); return; }
-            }
             const d = {
                 name: document.getElementById('editTransName').value,
-                trip_type: tripTypeVal,
-                return_rate_multiplier: returnMultiplier,
                 adult_rate_peak: parseFloat(document.getElementById('editTransPeakAdult').value)||0,
                 child_rate_peak: parseFloat(document.getElementById('editTransPeakChild').value)||0,
                 peak_pricing_type: document.getElementById('editTransPeakType').value,

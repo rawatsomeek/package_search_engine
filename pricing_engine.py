@@ -1,14 +1,13 @@
 """
 Travel Pricing Rule Engine — Enterprise Edition
 ================================================
-Version 4.0 — Hard Delete + Transport Trip Type + Return Multiplier
+Version 4.1 — Transport simplified (no trip_type / return_rate_multiplier)
 
 Core calculation logic with:
   - Multi-client scoping
   - Dynamic rule engine
   - Occupancy-based room calculator
   - Transport pricing type support (per_person/per_vehicle)
-  - Transport trip type support (one_way/return/both) with return_rate_multiplier
   - Add-on peak/off rates
   - Flight component support (one_way / return)
   - Live hotel support (Amadeus Hotel Offers API)
@@ -20,13 +19,6 @@ AI layers and frontends MUST call this engine — never compute prices themselve
 Hotel Source Behavior:
   - hotel_source == "admin" (default): existing per-person per-night logic, all hotel rules apply
   - hotel_source == "live": Amadeus total stay price used directly, entity_type="hotel" rules skipped
-
-Transport Trip Type Behavior:
-  - payload['trip_type'] in ('one_way', 'return')
-  - If trip_type == 'return' AND transport.trip_type IN ('both', 'return'):
-      transport_cost = base_cost * transport.return_rate_multiplier
-  - If trip_type == 'one_way' OR transport.trip_type == 'one_way':
-      transport_cost = base_cost (no multiplier)
 """
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -456,21 +448,12 @@ class LiveHotelCostCalculator:
 
 class TransportCostCalculator:
     """
-    Calculates transport cost with full support for:
+    Calculates transport cost based on:
       - per_person vs per_vehicle pricing types
-      - one_way vs return trip types with configurable return_rate_multiplier
+      - Peak / off season rates
 
     This is the SINGLE SOURCE OF TRUTH for transport cost computation.
-
-    Trip Type Logic:
-      - payload trip_type = 'return'
-        AND transport.trip_type IN ('both', 'return')
-        → base_cost × return_rate_multiplier
-      - Any other combination → base_cost (no multiplier)
-
-    The multiplier is stored per-transport in the DB, defaulting to 1.8 (1.8×).
-    This means a return journey costs 1.8× the one-way base price by default.
-    Admin can override per transport in the admin panel.
+    No trip_type or return_rate_multiplier logic — rates are flat.
     """
 
     @staticmethod
@@ -479,7 +462,6 @@ class TransportCostCalculator:
         adults: int,
         children: int,
         season: str,
-        user_trip_type: str
     ) -> Decimal:
         """
         Calculate transport cost from a DB row.
@@ -487,12 +469,10 @@ class TransportCostCalculator:
         Args:
             transport_row: Tuple from DB query:
                 (adult_rate_peak, child_rate_peak, peak_pricing_type,
-                 adult_rate_off, child_rate_off, off_pricing_type,
-                 trip_type, return_rate_multiplier)
+                 adult_rate_off, child_rate_off, off_pricing_type)
             adults: Number of adults
             children: Number of children
             season: 'ON' or 'OFF'
-            user_trip_type: 'one_way' or 'return' from user selection
 
         Returns:
             Decimal transport cost
@@ -509,9 +489,6 @@ class TransportCostCalculator:
             child_rate = Decimal(str(transport_row[4]))
             pricing_type = transport_row[5]
 
-        transport_trip_type = transport_row[6] or 'both'  # 'one_way', 'return', 'both'
-        return_multiplier = Decimal(str(transport_row[7])) if transport_row[7] else Decimal('1.8')
-
         # Calculate base cost based on pricing type
         if pricing_type == 'per_vehicle':
             # adult_rate = full vehicle cost; child_rate unused
@@ -520,21 +497,8 @@ class TransportCostCalculator:
             # Default: per_person
             base_cost = (adult_rate * adults) + (child_rate * children)
 
-        # Apply return multiplier if applicable:
-        # User selected 'return' AND transport supports return ('both' or 'return')
-        if user_trip_type == 'return' and transport_trip_type in ('both', 'return'):
-            total = (base_cost * return_multiplier).quantize(Decimal('0.01'), ROUND_HALF_UP)
-            logger.info(
-                f"Transport cost (return): base={base_cost}, "
-                f"multiplier={return_multiplier}, total={total}"
-            )
-        else:
-            total = base_cost.quantize(Decimal('0.01'), ROUND_HALF_UP)
-            logger.info(
-                f"Transport cost (one_way): base={base_cost}, total={total}, "
-                f"user_trip_type={user_trip_type}, transport_trip_type={transport_trip_type}"
-            )
-
+        total = base_cost.quantize(Decimal('0.01'), ROUND_HALF_UP)
+        logger.info(f"Transport cost: base={base_cost}, total={total}, pricing_type={pricing_type}")
         return total
 
 
@@ -544,12 +508,11 @@ class TransportCostCalculator:
 
 class TravelPricingEngine:
     """
-    Core pricing engine — enterprise edition v4.0.
+    Core pricing engine — enterprise edition v4.1.
     All calculations are client-scoped.
     Rule engine applies dynamic adjustments.
     Room calculator handles occupancy.
     Transport pricing type support (per_person/per_vehicle).
-    Transport trip type support (one_way/return/both) with return_rate_multiplier.
     Add-on peak/off rates.
     Flight component support (one_way/return via Amadeus).
     Live hotel support (Amadeus Hotel Offers API total price).
@@ -564,15 +527,6 @@ class TravelPricingEngine:
         - Does NOT multiply by nights/pax/rooms
         - hotel entity_type rules are SKIPPED
         - Global rules and margin still apply
-
-    Transport Trip Type Modes (new in v4.0):
-      trip_type = "one_way" (in payload):
-        - Base transport cost only
-      trip_type = "return" (in payload):
-        - IF transport.trip_type IN ('both', 'return'):
-          base × return_rate_multiplier
-        - IF transport.trip_type = 'one_way':
-          base cost only (transport does not support return)
     """
 
     def __init__(self, db_connection, client_id: int = 1):
@@ -593,10 +547,6 @@ class TravelPricingEngine:
         Supports two hotel source modes controlled by payload['hotel_source']:
           "admin" (default) — existing DB hotel pricing logic
           "live"            — Amadeus total stay price passthrough
-
-        Supports trip type via payload['trip_type']:
-          "one_way" — base transport cost
-          "return"  — base transport cost × return_rate_multiplier (if transport supports it)
         """
         self._validate_inputs(payload)
 
@@ -615,12 +565,6 @@ class TravelPricingEngine:
         kasol_sharing = payload.get('kasolSharing', '')
         per_night_kasol = payload.get('perNightKasolSharing', {})
         addon_keys = payload.get('addons', [])
-
-        # Trip type from user selection: 'one_way' or 'return'
-        # Default is 'return' (per UI requirement)
-        user_trip_type = payload.get('trip_type', 'return').lower().strip()
-        if user_trip_type not in ('one_way', 'return'):
-            user_trip_type = 'return'
 
         # Hotel source flag — controls which hotel pricing path to use
         hotel_source = payload.get('hotel_source', 'admin').lower().strip()
@@ -671,9 +615,9 @@ class TravelPricingEngine:
             )
             logger.info(f"Hotel path: ADMIN — hotel_cost={hotel_cost}")
 
-        # ---- TRANSPORT COST (with trip type support) ----
+        # ---- TRANSPORT COST ----
         transport_cost, transport_meta = self._calculate_transport_cost(
-            transport_key, adults, children, season, user_trip_type
+            transport_key, adults, children, season
         )
 
         # ---- SIGHTSEEING COST ----
@@ -720,7 +664,6 @@ class TravelPricingEngine:
             'sightseeing_days': len([d for d in days_list if d != 'N/A']),
             'has_flight': flight_cost > 0,
             'hotel_source': hotel_source,
-            'trip_type': user_trip_type,
         }
 
         # Apply pricing rules
@@ -774,7 +717,6 @@ class TravelPricingEngine:
             'adults': adults,
             'children': children,
             'hotelSource': hotel_source,
-            'tripType': user_trip_type,
             'transportMeta': transport_meta,
         }
 
@@ -920,7 +862,7 @@ class TravelPricingEngine:
     # -------------------------------------------------
 
     def _calculate_transport_cost(
-        self, transport_key: str, adults: int, children: int, season: str, user_trip_type: str
+        self, transport_key: str, adults: int, children: int, season: str
     ) -> Tuple[Decimal, Dict]:
         """
         Calculate transport cost using TransportCostCalculator.
@@ -934,8 +876,7 @@ class TravelPricingEngine:
         cursor = self.db.cursor()
         cursor.execute(
             """SELECT adult_rate_peak, child_rate_peak, peak_pricing_type,
-                      adult_rate_off, child_rate_off, off_pricing_type,
-                      trip_type, return_rate_multiplier
+                      adult_rate_off, child_rate_off, off_pricing_type
                FROM transports
                WHERE transport_type = %s AND client_id = %s AND active = TRUE""",
             (transport_key, self.client_id)
@@ -944,19 +885,11 @@ class TravelPricingEngine:
         if not row:
             return Decimal('0'), {}
 
-        transport_trip_type = row[6] or 'both'
-        return_multiplier = Decimal(str(row[7])) if row[7] else Decimal('1.8')
+        cost = TransportCostCalculator.calculate(row, adults, children, season)
 
-        cost = TransportCostCalculator.calculate(row, adults, children, season, user_trip_type)
-
-        # Build metadata for the response (informational, not used in math elsewhere)
+        # Build metadata for the response (informational only)
         meta = {
-            'trip_type': user_trip_type,
-            'transport_trip_type': transport_trip_type,
-            'return_multiplier_applied': (
-                user_trip_type == 'return' and transport_trip_type in ('both', 'return')
-            ),
-            'return_rate_multiplier': float(return_multiplier),
+            'pricing_type': row[2] if season == 'ON' else row[5],
         }
 
         return cost, meta

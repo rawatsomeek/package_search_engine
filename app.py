@@ -2809,13 +2809,14 @@ def update_transport(tid):
             transport_type = auto_generate_transport_type(cur, name, client_id, region_id, exclude_id=tid)
 
         defaults = get_safe_defaults_for_entity('transport', data)
+        update_region_id = data.get('region_id', region_id)
 
         cur.execute(
             """UPDATE transports SET name=%s, region_id=%s, transport_type=%s,
                adult_rate_peak=%s, child_rate_peak=%s, peak_pricing_type=%s,
                adult_rate_off=%s, child_rate_off=%s, off_pricing_type=%s
                WHERE id=%s""",
-            (name, data['region_id'], transport_type,
+            (name, update_region_id, transport_type,
              defaults['adult_rate_peak'], defaults['child_rate_peak'], defaults['peak_pricing_type'],
              defaults['adult_rate_off'], defaults['child_rate_off'], defaults['off_pricing_type'], tid)
         )
@@ -6730,15 +6731,6 @@ def calculate():
         client_id = int(payload.get('client_id', 1))
         logger.info(f"Calculate request for client {client_id}: {json.dumps(payload, default=str)}")
 
-        # ── Change 1: Extract and validate tripType from top-level payload ───
-        # This applies to transport-level trip type (e.g., one-way vs return bus booking).
-        # It is separate from flight block trip type which is handled in _extract_flight_block().
-        raw_transport_trip_type = payload.get('tripType') or payload.get('trip_type') or 'one_way'
-        transport_trip_type = _validate_and_normalise_trip_type(raw_transport_trip_type)
-        payload['tripType'] = transport_trip_type
-        payload['trip_type'] = transport_trip_type  # snake_case alias for engine
-        logger.info(f"Transport trip type: {transport_trip_type}")
-
         # ── Phase 3: extract optional flight block ────────────────────────────
         flight_block = _extract_flight_block(payload)
         payload['flight'] = flight_block
@@ -6992,13 +6984,11 @@ def calculate():
         result.setdefault('rooms', payload.get('rooms', 0))
         result.setdefault('appliedRules', [])
         result.setdefault('hotelSource', hotel_source)
-        result.setdefault('tripType', transport_trip_type)
 
         logger.info(
             f"Calculation successful: total={result.get('total')}, "
             f"perPerson={result.get('perPerson')}, "
-            f"hotelSource={hotel_source}, "
-            f"tripType={transport_trip_type}"
+            f"hotelSource={hotel_source}"
         )
 
         return jsonify(result)

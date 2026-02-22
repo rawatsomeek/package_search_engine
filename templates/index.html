@@ -721,17 +721,30 @@ header::after{
   #sidebar{
     display:none;
     position:fixed;bottom:0;left:0;right:0;z-index:450;
-    width:100%;max-height:70vh;height:auto;
-    border-radius:20px 20px 0 0;border:1px solid var(--glass-border);
-    border-bottom:none;padding:1.25rem 1rem;
-    transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);
+    width:100%;max-height:75vh;height:auto;
+    border-radius:20px 20px 0 0;
+    border:1px solid var(--glass-border);
+    border-bottom:none;
+    padding:1.25rem 1rem 2rem;
+    background:linear-gradient(180deg,rgba(15,15,30,0.98) 0%,rgba(10,10,20,0.99) 100%);
+    backdrop-filter:blur(40px) saturate(180%);
+    -webkit-backdrop-filter:blur(40px) saturate(180%);
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    transition:transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease;
     transform:translateY(100%);
-    max-height:70vh;
+    opacity:0;
   }
   #sidebar.mobile-open{
-    display:block;transform:translateY(0);
+    display:block;
+    transform:translateY(0);
+    opacity:1;
+  }
+  #mobileSidebarOverlay{
+    z-index:449;
   }
   #sidebarToggle{display:flex}
+  #sidebarDragHandle{display:block !important}
   #messages{min-height:250px;max-height:45vh}
   #optionsContainer{max-height:35vh}
   .dualSelectorContainer{flex-direction:column;gap:1.25rem;padding:1rem}
@@ -1063,9 +1076,11 @@ header::after{
         </div>
     </div>
     <div id="sidebar">
+        <!-- Mobile drag handle -->
+        <div id="sidebarDragHandle" onclick="toggleMobileSidebar()" style="display:none;width:40px;height:5px;background:rgba(255,255,255,0.25);border-radius:3px;margin:0 auto 1rem;cursor:pointer;"></div>
         <h3 style="margin-bottom:1rem;font-size:1.1rem;font-weight:600;display:flex;justify-content:space-between;align-items:center">
             Trip Summary
-            <button id="sidebarCloseBtn" onclick="toggleMobileSidebar()" style="display:none;background:none;border:none;color:#fff;cursor:pointer;font-size:1.2rem;padding:4px;line-height:1">×</button>
+            <button id="sidebarCloseBtn" onclick="toggleMobileSidebar()" style="display:none;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;cursor:pointer;font-size:1.1rem;padding:4px 10px;border-radius:8px;line-height:1">× Close</button>
         </h3>
         <div class="summary">Waiting for inputs…</div>
     </div>
@@ -1086,7 +1101,12 @@ function toggleMobileSidebar(){
         sidebar.classList.remove('mobile-open');
         overlay.classList.remove('show');
         closeBtn.style.display = 'none';
+        // Hide after transition
+        setTimeout(()=>{ if(!sidebar.classList.contains('mobile-open')) sidebar.style.display='none'; }, 380);
     } else {
+        sidebar.style.display = 'block';
+        // Force reflow before adding class so transition plays
+        sidebar.getBoundingClientRect();
         sidebar.classList.add('mobile-open');
         overlay.classList.add('show');
         closeBtn.style.display = 'block';
@@ -1097,10 +1117,13 @@ window.addEventListener('resize', ()=>{
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('mobileSidebarOverlay');
     const closeBtn = document.getElementById('sidebarCloseBtn');
+    const dragHandle = document.getElementById('sidebarDragHandle');
     if(window.innerWidth > 768){
         sidebar.classList.remove('mobile-open');
+        sidebar.style.display = '';
         overlay.classList.remove('show');
-        closeBtn.style.display = 'none';
+        if(closeBtn) closeBtn.style.display = 'none';
+        if(dragHandle) dragHandle.style.display = 'none';
     }
 });
 
@@ -1163,11 +1186,6 @@ let selectedRegionType="",selectedRegion=null,selectedDestination=null,selectedS
 let selectedAdults=2,selectedChildren=0,selectedNights=0,selectedSightseeingDays=0,selectedRooms=0;
 let selectedTransport="",selectedCab="",selectedHotel="",kasolSharing="";
 let sightseeingSelectionsState=[],perNightHotels={},perNightKasolSharing={},selectedAddons=[];
-
-/* ============================================================
-   TRIP TYPE STATE (NEW — ONE WAY / RETURN)
-   ============================================================ */
-let tripType = "return"; // default: return
 
 /* ============================================================
    HOTEL SOURCE STATE
@@ -1565,7 +1583,6 @@ function goHome(){
     selectedAdults=2;selectedChildren=0;selectedNights=0;selectedSightseeingDays=0;selectedRooms=0;
     selectedTransport='';selectedCab='';selectedHotel='';kasolSharing='';
     sightseeingSelectionsState=[];perNightHotels={};perNightKasolSharing={};selectedAddons=[];
-    tripType='return';
     hotelSource='admin';
     resetLiveHotelState();
     resetFlightState();
@@ -2038,37 +2055,12 @@ function renderRooms(){
 }
 
 /* ============================================================
-   TRANSPORT STEP (WITH TRIP TYPE ONE WAY / RETURN)
+   TRANSPORT STEP
    ============================================================ */
 function renderTransport(){
     addBot("Choose your transport option:");
     const filtered = getFilteredTransports();
     if(!filtered.length){addBot("No transport options available. Please go back.");return;}
-
-    // Trip Type Selection
-    const tripTypeContainer = document.createElement('div');
-    tripTypeContainer.className = 'tripTypeContainer';
-    const tripTypeLabel = document.createElement('span');
-    tripTypeLabel.className = 'tripTypeLabel';
-    tripTypeLabel.textContent = '🔄 Journey Type';
-    const tripTypeBtns = document.createElement('div');
-    tripTypeBtns.className = 'tripTypeBtns';
-
-    [['one_way','🛫 One Way'],['return','🔁 Return (default)']].forEach(([val, label]) => {
-        const btn = document.createElement('button');
-        btn.className = 'tripTypeBtn' + (tripType === val ? ' active' : '');
-        btn.textContent = label;
-        btn.onclick = () => {
-            tripType = val;
-            tripTypeBtns.querySelectorAll('.tripTypeBtn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            updateSummary();
-        };
-        tripTypeBtns.appendChild(btn);
-    });
-
-    tripTypeContainer.append(tripTypeLabel, tripTypeBtns);
-    optionsContainer.appendChild(tripTypeContainer);
 
     // Transport options
     filtered.forEach(t=>{
@@ -2955,9 +2947,6 @@ function updateSummary(){
     if(selectedNights>0){html+=`<b>🌙 Nights:</b> ${selectedNights}<br>`;}
     if(selectedSightseeingDays>0){html+=`<b>🗺 Sightseeing:</b> ${selectedSightseeingDays} day${selectedSightseeingDays!==1?'s':''}<br>`;}
 
-    // Trip type
-    html+=`<b>🔄 Journey:</b> ${tripType==='return'?'Return':'One Way'}<br>`;
-
     html+=`<b>🏨 Hotel Source:</b> ${hotelSource==='live'?'Live (Amadeus)':'Our Hotels'}<br>`;
     if(hotelSource==='live' && liveHotelState.selectedOffer){
         html+=`<b>🏨 Hotel:</b> ${liveHotelState.selectedOffer.hotelName}<br>`;
@@ -3000,7 +2989,6 @@ function updateSummary(){
         html+=`<b>🔧 Service:</b> ${formatCurrency(lc.serviceCharge)}<br>`;
         html+=`<b>📋 Booking:</b> ${formatCurrency(lc.bookingCharge)}<br>`;
         if(lc.rooms) html+=`<b>🚪 Rooms:</b> ${lc.rooms}<br>`;
-        if(lc.tripType) html+=`<b>🔄 Trip Type:</b> ${lc.tripType}<br>`;
         if(lc.hotelSource) html+=`<b>🏨 Source:</b> ${lc.hotelSource}<br>`;
         if(lc.appliedRules && lc.appliedRules.length){
             html+=`<b>📜 Rules Applied:</b> ${lc.appliedRules.map(r=>r.name).join(', ')}<br>`;
@@ -3040,9 +3028,6 @@ async function submitData(){
             days: sightseeingSelectionsState.slice(0, Math.max(selectedNights, selectedSightseeingDays)),
             addons: hotelSource === 'live' ? [] : selectedAddons,
             hotel_source: hotelSource,
-            // Trip type — passed to backend for transport pricing multiplier
-            tripType: tripType,
-            trip_type: tripType,
         };
 
         if(hotelSource === 'admin'){
@@ -3100,7 +3085,6 @@ async function submitData(){
         msg+=`  📋 Booking: ${formatCurrency(data.bookingCharge)}\n`;
         if(data.rooms) msg+=`\n🚪 Rooms: ${data.rooms}`;
         if(data.roomAllocation) msg+=` (${data.roomAllocation.allocation_detail})`;
-        if(data.tripType) msg+=`\n🔄 Journey: ${data.tripType}`;
         msg+='\n';
         if(data.hotelSource==='live') msg+=`🌐 Hotel Source: Live (Amadeus)\n`;
         if(data.liveHotelMeta && data.liveHotelMeta.hotelName){
@@ -3116,9 +3100,13 @@ async function submitData(){
                 const sidebar = document.getElementById('sidebar');
                 const overlay = document.getElementById('mobileSidebarOverlay');
                 const closeBtn = document.getElementById('sidebarCloseBtn');
+                const dragHandle = document.getElementById('sidebarDragHandle');
+                sidebar.style.display = 'block';
+                sidebar.getBoundingClientRect();
                 sidebar.classList.add('mobile-open');
                 overlay.classList.add('show');
-                closeBtn.style.display = 'block';
+                if(closeBtn) closeBtn.style.display = 'block';
+                if(dragHandle) dragHandle.style.display = 'block';
             }, 800);
         }
 
@@ -3305,7 +3293,6 @@ function startOver(){
     selectedAdults=2;selectedChildren=0;selectedNights=0;selectedSightseeingDays=0;selectedRooms=0;
     selectedTransport='';selectedCab='';selectedHotel='';kasolSharing='';
     sightseeingSelectionsState=[];perNightHotels={};perNightKasolSharing={};selectedAddons=[];
-    tripType='return';
     hotelSource='admin';
     resetLiveHotelState();
     resetFlightState();
@@ -3341,7 +3328,6 @@ async function sendAIMessage(prefill){
         transport:selectedTransport,
         hotel:hotelSource==='live'?null:selectedHotel,
         hotelSource,
-        tripType,
         selectedAddons,
         cab:selectedCab,
         language: window.selectedLanguageName || 'English',
