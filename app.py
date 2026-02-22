@@ -1557,67 +1557,94 @@ import datetime as _datetime
 
 def _send_email_notification(to_address: str, subject: str, html_body: str) -> bool:
     """
-    Send email via Gmail. Tries port 465 (SSL) first, then 587 (STARTTLS) as fallback.
-    Port 465 is more reliable on cloud providers like Render that may restrict 587.
+    Send email notification.
+    Primary:  Resend API (HTTPS port 443 — works on Render free tier)
+    Fallback: SMTP via port 465 SSL then 587 STARTTLS
+    Render free tier blocks SMTP ports 465/587, so Resend is required in production.
     """
-    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    import ssl as _ssl
+
+    # ── Strategy 1: Resend API (HTTPS — never blocked by cloud providers) ────
+    resend_api_key = os.environ.get('RESEND_API_KEY', '').strip()
     smtp_user = os.environ.get('SMTP_USER', '').strip()
+
+    if resend_api_key:
+        try:
+            from_addr = os.environ.get('FROM_EMAIL', f'Global Calc <onboarding@resend.dev>').strip()
+            payload = {
+                'from': from_addr,
+                'to': [to_address],
+                'subject': subject,
+                'html': html_body,
+            }
+            resp = _requests.post(
+                'https://api.resend.com/emails',
+                headers={
+                    'Authorization': f'Bearer {resend_api_key}',
+                    'Content-Type': 'application/json',
+                },
+                json=payload,
+                timeout=15,
+            )
+            if resp.status_code in (200, 201):
+                logger.info(f"✅ Email sent via Resend to {to_address}: {subject}")
+                return True
+            else:
+                logger.error(f"Resend API error {resp.status_code}: {resp.text}")
+                # Fall through to SMTP
+        except Exception as exc:
+            logger.error(f"Resend API exception: {exc} — falling back to SMTP")
+
+    # ── Strategy 2: SMTP port 465 SSL ─────────────────────────────────────────
+    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
     smtp_pass = os.environ.get('SMTP_PASSWORD', '').strip().replace(' ', '')
     from_email = os.environ.get('FROM_EMAIL', smtp_user).strip() or smtp_user
 
     if not smtp_user or not smtp_pass:
-        logger.error(
-            f"SMTP credentials missing — SMTP_USER={smtp_user!r} "
-            f"SMTP_PASSWORD configured={bool(smtp_pass)}. "
-            "Set both in Render Environment dashboard."
-        )
+        logger.error("No RESEND_API_KEY and no SMTP credentials — email cannot be sent.")
         return False
 
-    import ssl as _ssl
     msg = _MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = f'Global Calc Admin <{from_email}>'
     msg['To'] = to_address
     msg.attach(_MIMEText(html_body, 'html', 'utf-8'))
 
-    # Strategy 1 — Port 465 SMTP_SSL (direct TLS, most reliable on cloud)
     try:
-        logger.info(f"SMTP attempt via port 465 SSL — user={smtp_user!r} to={to_address!r}")
+        logger.info(f"SMTP attempt port 465 — user={smtp_user!r} to={to_address!r}")
         ctx = _ssl.create_default_context()
         with _smtplib.SMTP_SSL(smtp_host, 465, context=ctx, timeout=15) as server:
             server.login(smtp_user, smtp_pass)
             server.sendmail(from_email, [to_address], msg.as_string())
-        logger.info(f"✅ Email sent via port 465 to {to_address}: {subject}")
+        logger.info(f"✅ Email sent via SMTP port 465 to {to_address}")
         return True
     except _smtplib.SMTPAuthenticationError as exc:
-        logger.error(f"SMTP auth failed (port 465): {exc}. Check App Password.")
-        return False  # Auth failure — no point trying port 587 with same creds
+        logger.error(f"SMTP auth failed: {exc}")
+        return False
     except Exception as exc_465:
-        logger.warning(f"Port 465 failed ({exc_465}), trying port 587 STARTTLS...")
+        logger.warning(f"SMTP port 465 failed: {exc_465} — trying port 587")
 
-    # Strategy 2 — Port 587 STARTTLS (fallback)
+    # ── Strategy 3: SMTP port 587 STARTTLS ────────────────────────────────────
     try:
-        logger.info(f"SMTP attempt via port 587 STARTTLS — user={smtp_user!r} to={to_address!r}")
+        logger.info(f"SMTP attempt port 587 — user={smtp_user!r} to={to_address!r}")
         with _smtplib.SMTP(smtp_host, 587, timeout=15) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(smtp_user, smtp_pass)
             server.sendmail(from_email, [to_address], msg.as_string())
-        logger.info(f"✅ Email sent via port 587 to {to_address}: {subject}")
+        logger.info(f"✅ Email sent via SMTP port 587 to {to_address}")
         return True
     except _smtplib.SMTPAuthenticationError as exc:
-        logger.error(f"SMTP auth failed (port 587): {exc}. Check App Password.")
+        logger.error(f"SMTP auth failed (587): {exc}")
         return False
     except Exception as exc_587:
         logger.error(
-            f"Both SMTP attempts failed. "
+            f"All email strategies failed. "
             f"Port 465: {exc_465} | Port 587: {exc_587}. "
-            f"Check if Render blocks outbound SMTP or use a transactional email service."
+            "Set RESEND_API_KEY in Render Environment for reliable email delivery."
         )
         return False
-
-
 def _get_app_base_url() -> str:
     configured = os.environ.get('APP_URL', '').strip().rstrip('/')
     if configured:
@@ -1764,15 +1791,14 @@ RESET_TOKEN_EXPIRY_HOURS   = 2
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route('/admin/test-email', methods=['GET'])
 def admin_test_email():
-    """SMTP diagnostic — tries port 465 then 587. Returns full result as JSON."""
-    import smtplib as _smtplib_t, ssl as _ssl_t
-    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-    smtp_user = os.environ.get('SMTP_USER', '').strip()
-    smtp_pass = os.environ.get('SMTP_PASSWORD', '').strip().replace(' ', '')
-    app_url   = os.environ.get('APP_URL', 'not set')
+    """SMTP/Resend diagnostic — returns full delivery result as JSON."""
+    resend_key = os.environ.get('RESEND_API_KEY', '').strip()
+    smtp_user  = os.environ.get('SMTP_USER', '').strip()
+    smtp_pass  = os.environ.get('SMTP_PASSWORD', '').strip().replace(' ', '')
+    app_url    = os.environ.get('APP_URL', 'not set')
 
     diag = {
-        'smtp_host': smtp_host,
+        'resend_configured': bool(resend_key),
         'smtp_user': smtp_user,
         'smtp_pass_len': len(smtp_pass),
         'smtp_pass_set': bool(smtp_pass),
@@ -1780,45 +1806,57 @@ def admin_test_email():
         'owner_email': OWNER_EMAIL,
     }
 
-    if not smtp_user or not smtp_pass:
-        return jsonify({'status': 'error', 'reason': 'SMTP credentials missing', 'diag': diag}), 500
+    # Try Resend first
+    if resend_key:
+        try:
+            resp = _requests.post(
+                'https://api.resend.com/emails',
+                headers={'Authorization': f'Bearer {resend_key}', 'Content-Type': 'application/json'},
+                json={
+                    'from': f'Global Calc <onboarding@resend.dev>',
+                    'to': [OWNER_EMAIL],
+                    'subject': '[Global Calc] SMTP Test',
+                    'html': f'<p>Test email from Global Calc.<br>APP_URL: {app_url}</p>',
+                },
+                timeout=15,
+            )
+            if resp.status_code in (200, 201):
+                logger.info(f"Test email sent via Resend to {OWNER_EMAIL}")
+                diag['method'] = 'resend'
+                return jsonify({'status': 'success', 'method': 'resend', 'message': f'Email sent to {OWNER_EMAIL}', 'diag': diag})
+            else:
+                diag['resend_error'] = f"{resp.status_code}: {resp.text}"
+        except Exception as exc:
+            diag['resend_error'] = str(exc)
 
-    from email.mime.text import MIMEText as _MT
-    body = f"SMTP test from Global Calc.\nAPP_URL: {app_url}\nSent from: {smtp_user}"
-    msg = _MT(body, 'plain')
-    msg['Subject'] = '[Global Calc] SMTP Test'
-    msg['From']    = smtp_user
-    msg['To']      = OWNER_EMAIL
+    # Try SMTP
+    if smtp_user and smtp_pass:
+        import smtplib as _st, ssl as _sl
+        from email.mime.text import MIMEText as _MT
+        msg = _MT(f'Test from Global Calc. APP_URL: {app_url}', 'plain')
+        msg['Subject'] = '[Global Calc] SMTP Test'
+        msg['From'] = smtp_user
+        msg['To'] = OWNER_EMAIL
+        try:
+            ctx = _sl.create_default_context()
+            with _st.SMTP_SSL('smtp.gmail.com', 465, context=ctx, timeout=10) as s:
+                s.login(smtp_user, smtp_pass)
+                s.sendmail(smtp_user, [OWNER_EMAIL], msg.as_string())
+            diag['method'] = 'smtp_465'
+            return jsonify({'status': 'success', 'method': 'smtp_465', 'message': f'Email sent to {OWNER_EMAIL}', 'diag': diag})
+        except Exception as exc_465:
+            diag['smtp_465_error'] = str(exc_465)
+        try:
+            with _st.SMTP('smtp.gmail.com', 587, timeout=10) as s:
+                s.ehlo(); s.starttls(); s.ehlo()
+                s.login(smtp_user, smtp_pass)
+                s.sendmail(smtp_user, [OWNER_EMAIL], msg.as_string())
+            diag['method'] = 'smtp_587'
+            return jsonify({'status': 'success', 'method': 'smtp_587', 'message': f'Email sent to {OWNER_EMAIL}', 'diag': diag})
+        except Exception as exc_587:
+            diag['smtp_587_error'] = str(exc_587)
 
-    # Try port 465 SSL first
-    try:
-        ctx = _ssl_t.create_default_context()
-        with _smtplib_t.SMTP_SSL(smtp_host, 465, context=ctx, timeout=10) as s:
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(smtp_user, [OWNER_EMAIL], msg.as_string())
-        logger.info(f"Test email sent via port 465 to {OWNER_EMAIL}")
-        diag['port_used'] = 465
-        return jsonify({'status': 'success', 'port': 465, 'message': f'Email sent to {OWNER_EMAIL}', 'diag': diag})
-    except _smtplib_t.SMTPAuthenticationError as exc:
-        return jsonify({'status': 'auth_failed', 'port': 465, 'error': str(exc), 'diag': diag}), 500
-    except Exception as exc_465:
-        diag['port_465_error'] = str(exc_465)
-
-    # Try port 587 STARTTLS fallback
-    try:
-        with _smtplib_t.SMTP(smtp_host, 587, timeout=10) as s:
-            s.ehlo(); s.starttls(); s.ehlo()
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(smtp_user, [OWNER_EMAIL], msg.as_string())
-        logger.info(f"Test email sent via port 587 to {OWNER_EMAIL}")
-        diag['port_used'] = 587
-        return jsonify({'status': 'success', 'port': 587, 'message': f'Email sent to {OWNER_EMAIL}', 'diag': diag})
-    except _smtplib_t.SMTPAuthenticationError as exc:
-        return jsonify({'status': 'auth_failed', 'port': 587, 'error': str(exc), 'diag': diag}), 500
-    except Exception as exc_587:
-        diag['port_587_error'] = str(exc_587)
-        return jsonify({'status': 'both_failed', 'diag': diag}), 500
-
+    return jsonify({'status': 'all_failed', 'fix': 'Set RESEND_API_KEY in Render Environment', 'diag': diag}), 500
 
 @app.route('/admin/setup-page', methods=['GET'])
 def admin_setup_page():
