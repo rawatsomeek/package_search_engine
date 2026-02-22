@@ -721,27 +721,27 @@ header::after{
   #sidebar{
     display:none;
     position:fixed;bottom:0;left:0;right:0;z-index:450;
-    width:100%;max-height:75vh;height:auto;
+    width:100%;max-height:78vh;height:auto;
     border-radius:20px 20px 0 0;
-    border:1px solid var(--glass-border);
-    border-bottom:none;
-    padding:1.25rem 1rem 2rem;
-    background:linear-gradient(180deg,rgba(15,15,30,0.98) 0%,rgba(10,10,20,0.99) 100%);
-    backdrop-filter:blur(40px) saturate(180%);
-    -webkit-backdrop-filter:blur(40px) saturate(180%);
+    border-top:1px solid rgba(102,126,234,0.3);
+    border-left:none;border-right:none;border-bottom:none;
+    padding:1.25rem 1rem 2.5rem;
+    /* Fully opaque — no bleed-through on mobile */
+    background:#0d0d1a;
     overflow-y:auto;
     -webkit-overflow-scrolling:touch;
-    transition:transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease;
+    transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);
     transform:translateY(100%);
-    opacity:0;
+    /* shadow to lift it visually above page content */
+    box-shadow:0 -8px 40px rgba(0,0,0,0.8), 0 -2px 0 rgba(102,126,234,0.4);
   }
   #sidebar.mobile-open{
     display:block;
     transform:translateY(0);
-    opacity:1;
   }
   #mobileSidebarOverlay{
     z-index:449;
+    background:rgba(0,0,0,0.6);
   }
   #sidebarToggle{display:flex}
   #sidebarDragHandle{display:block !important}
@@ -754,6 +754,8 @@ header::after{
   .liveHotelSearchGrid{grid-template-columns:1fr}
   .liveHotelModalBox{padding:1.25rem;border-radius:16px}
   .flightDetailGrid{grid-template-columns:1fr}
+  /* Ensure summary content is readable on solid dark background */
+  #sidebar .summary{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1)}
 }
 
 /* Small phones (480px and below) */
@@ -1101,12 +1103,12 @@ function toggleMobileSidebar(){
         sidebar.classList.remove('mobile-open');
         overlay.classList.remove('show');
         closeBtn.style.display = 'none';
-        // Hide after transition
-        setTimeout(()=>{ if(!sidebar.classList.contains('mobile-open')) sidebar.style.display='none'; }, 380);
+        // Wait for slide-down transition before hiding
+        setTimeout(()=>{ if(!sidebar.classList.contains('mobile-open')) sidebar.style.display='none'; }, 370);
     } else {
         sidebar.style.display = 'block';
-        // Force reflow before adding class so transition plays
-        sidebar.getBoundingClientRect();
+        // Force reflow so transform transition fires correctly
+        void sidebar.offsetHeight;
         sidebar.classList.add('mobile-open');
         overlay.classList.add('show');
         closeBtn.style.display = 'block';
@@ -3102,7 +3104,7 @@ async function submitData(){
                 const closeBtn = document.getElementById('sidebarCloseBtn');
                 const dragHandle = document.getElementById('sidebarDragHandle');
                 sidebar.style.display = 'block';
-                sidebar.getBoundingClientRect();
+                void sidebar.offsetHeight;
                 sidebar.classList.add('mobile-open');
                 overlay.classList.add('show');
                 if(closeBtn) closeBtn.style.display = 'block';
