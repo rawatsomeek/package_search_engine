@@ -39,21 +39,17 @@ header{
   background:var(--glass-bg);backdrop-filter:blur(20px) saturate(180%);
   -webkit-backdrop-filter:blur(20px) saturate(180%);
   border-bottom:1px solid var(--glass-border);position:relative;z-index:10;letter-spacing:-0.03em;
+  transition:background 0.3s;
 }
+header:hover{background:rgba(255,255,255,0.12);}
 header::after{
   content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);
   width:100px;height:2px;background:var(--primary-gradient);box-shadow:var(--neon-glow);
 }
 .brand-tagline{font-size:clamp(0.55rem,2vw,0.7rem);font-weight:400;margin-bottom:0.4rem;opacity:0.6;letter-spacing:0.1em;text-transform:uppercase}
 .subtitle{font-size:clamp(0.6rem,2vw,0.8rem);font-weight:400;margin-top:0.4rem;opacity:0.6;letter-spacing:0.05em;text-transform:uppercase}
-.admin-link{
-  position:absolute;top:50%;right:16px;transform:translateY(-50%);
-  padding:8px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
-  border-radius:8px;color:#fff;text-decoration:none;font-size:11px;font-weight:600;
-  transition:var(--transition-smooth);white-space:nowrap;
-  min-height:var(--touch-min);display:inline-flex;align-items:center;
-}
-.admin-link:hover{background:rgba(255,255,255,0.2)}
+/* admin-link moved to navBtnGroup — see #adminPanelBtn */
+.admin-link{display:none}
 
 /* =====================================================
    MAIN LAYOUT
@@ -308,7 +304,7 @@ header::after{
    BACK + HOME BUTTONS
    ===================================================== */
 #navBtnGroup{
-  position:fixed;top:1rem;left:1rem;display:none;z-index:1000;
+  position:fixed;top:1rem;left:1rem;display:flex;z-index:1000;
   display:flex;gap:0.5rem;align-items:center;
 }
 #backBtn{
@@ -320,16 +316,9 @@ header::after{
   line-height:1;
 }
 #backBtn:hover{background:rgba(0,0,0,0.7);transform:translateX(-3px)}
-#homeBtn{
-  padding:0.625rem 0.875rem;
-  border-radius:10px;border:none;background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);
-  color:#fff;cursor:pointer;transition:var(--transition-smooth);
-  font-weight:600;font-size:1.1rem;min-height:var(--touch-min);
-  -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;
-}
-#homeBtn:hover{background:rgba(102,126,234,0.4);transform:scale(1.05)}
+/* homeBtn removed — header is now the home button */
 #navBtnGroup.visible{display:flex}
-#navBtnGroup.hidden{display:none}
+#navBtnGroup.hidden{display:flex} /* always visible — admin button is always accessible */
 
 /* =====================================================
    AI INPUT
@@ -351,8 +340,15 @@ header::after{
 }
 #voiceBtn:hover{background:rgba(102,126,234,0.25);transform:scale(1.05)}
 #voiceBtn.listening{background:var(--primary-gradient);animation:vp 1.5s ease-in-out infinite}
+#voiceBtn.speaking{background:linear-gradient(135deg,#f59e0b,#d97706);animation:vsp 1.2s ease-in-out infinite;border-color:rgba(245,158,11,0.5)}
 @keyframes vp{0%,100%{box-shadow:0 0 0 0 rgba(102,126,234,0.7)}50%{box-shadow:0 0 0 15px rgba(102,126,234,0)}}
+@keyframes vsp{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.7)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}
 #voiceBtn svg{width:18px;height:18px}
+/* mic icon — shown when idle/listening */
+#voiceBtn .icon-mic{display:block}
+#voiceBtn .icon-speaker{display:none}
+#voiceBtn.speaking .icon-mic{display:none}
+#voiceBtn.speaking .icon-speaker{display:block}
 .voice-status{
   position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);
   font-size:0.625rem;color:rgba(255,255,255,0.6);white-space:nowrap;opacity:0;transition:opacity .3s;
@@ -678,10 +674,11 @@ header::after{
 #sidebarToggle{
   display:none;
   position:fixed;bottom:80px;right:16px;z-index:500;
-  width:52px;height:52px;border-radius:50%;border:none;
-  background:var(--primary-gradient);color:#fff;font-size:1.2rem;cursor:pointer;
+  width:auto;min-width:52px;height:44px;border-radius:22px;border:none;
+  background:var(--primary-gradient);color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;
   box-shadow:0 4px 20px rgba(102,126,234,0.5);
   align-items:center;justify-content:center;
+  padding:0 14px;white-space:nowrap;letter-spacing:0.02em;
   -webkit-tap-highlight-color:transparent;
 }
 #mobileSidebarOverlay{
@@ -710,7 +707,7 @@ header::after{
 
 /* Tablets (768px and below) */
 @media (max-width:768px){
-  header{padding:1rem;padding-right:5rem}
+  header{padding:1rem}
   .admin-link{right:12px;padding:7px 10px;font-size:10px}
   #mainContainer{
     flex-direction:column;width:100%;margin:0;gap:0;
@@ -748,7 +745,7 @@ header::after{
 
 /* Small phones (480px and below) */
 @media (max-width:480px){
-  header{padding:0.875rem;padding-right:4.5rem}
+  header{padding:0.875rem}
   .admin-link{padding:6px 8px;font-size:9px;border-radius:6px}
   #chatbotContainer{padding:0.75rem}
   #messages{padding:0.875rem;gap:0.625rem;min-height:200px;max-height:40vh}
@@ -759,6 +756,7 @@ header::after{
   #aiInput{padding:0.75rem 0.875rem;font-size:0.8rem}
   #aiInputBtn{padding:0.75rem 0.875rem;font-size:0.8rem}
   #voiceBtn{width:40px;height:40px;min-width:40px}
+  #langSelectorBar{bottom:140px;right:8px}
   .counterSelectorContainer{padding:1rem}
   .counterBtn{width:40px;height:40px}
   .counterValue{font-size:1.25rem}
@@ -785,6 +783,28 @@ header::after{
   #aiInputBtn{padding:0.75rem;font-size:0.75rem}
   .optionButton{font-size:0.75rem;padding:0.5rem 0.75rem}
 }
+
+/* =====================================================
+   LANGUAGE SELECTOR
+   ===================================================== */
+#langSelectorBar{
+  position:fixed;top:0;right:0;z-index:20;
+  padding:0.4rem 0.6rem;
+  display:flex;align-items:center;gap:0.4rem;
+}
+#langSelect{
+  padding:0.35rem 0.6rem;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.2);
+  background:rgba(0,0,0,0.45);backdrop-filter:blur(10px);
+  color:#fff;font-size:0.72rem;font-weight:600;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+  font-family:inherit;
+}
+#langSelect option{background:#1a1a2e;color:#fff;}
+@media(max-width:768px){
+  #langSelectorBar{top:auto;bottom:134px;right:16px;padding:0;}
+  #langSelect{font-size:0.68rem;padding:0.3rem 0.5rem;}
+}
 </style>
 </head>
 <body>
@@ -792,16 +812,11 @@ header::after{
 <!-- Nav Button Group (Back + Home) -->
 <div id="navBtnGroup" class="hidden">
   <button id="backBtn" onclick="goBack()" title="Go Back">←</button>
-  <button id="homeBtn" onclick="goHome()" title="Go Home">
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-      <polyline points="9 22 9 12 15 12 15 22"></polyline>
-    </svg>
-  </button>
+  <a href="/admin" id="adminPanelBtn" title="Admin Panel" style="padding:0.625rem 0.875rem;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);color:#fff;cursor:pointer;transition:all 0.3s;font-weight:600;font-size:0.75rem;min-height:44px;display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;">Admin</a>
 </div>
 
 <!-- Mobile sidebar toggle -->
-<button id="sidebarToggle" onclick="toggleMobileSidebar()" aria-label="Toggle trip summary">💰</button>
+<button id="sidebarToggle" onclick="toggleMobileSidebar()" aria-label="Toggle trip summary">📋 Trip Summary</button>
 <div id="mobileSidebarOverlay" onclick="toggleMobileSidebar()"></div>
 
 <!-- LIVE HOTEL SEARCH MODAL -->
@@ -989,12 +1004,30 @@ header::after{
     </div>
 </div>
 
-<header>
+<header id="headerHomeBtn" onclick="goHome()" title="Click to go home" style="cursor:pointer;user-select:none;-webkit-user-select:none;">
     <div class="brand-tagline">AKS Hospitality: Journeys that awaken the soul</div>
     Trip Package Assistant
     <div class="subtitle">AI-Powered Travel Planner</div>
-    <a href="/admin" class="admin-link">Admin Panel</a>
 </header>
+
+<!-- Language Selector -->
+<div id="langSelectorBar">
+  <select id="langSelect" onchange="changeLanguage(this.value)" title="Select language">
+    <option value="en-IN">🇮🇳 English</option>
+    <option value="hi-IN">🇮🇳 हिन्दी</option>
+    <option value="mr-IN">🇮🇳 मराठी</option>
+    <option value="gu-IN">🇮🇳 ગુજરાતી</option>
+    <option value="ta-IN">🇮🇳 தமிழ்</option>
+    <option value="te-IN">🇮🇳 తెలుగు</option>
+    <option value="kn-IN">🇮🇳 ಕನ್ನಡ</option>
+    <option value="bn-IN">🇮🇳 বাংলা</option>
+    <option value="ar">🌍 العربية</option>
+    <option value="zh-CN">🇨🇳 中文</option>
+    <option value="fr">🇫🇷 Français</option>
+    <option value="de">🇩🇪 Deutsch</option>
+    <option value="ru">🇷🇺 Русский</option>
+  </select>
+</div>
 
 <div id="mainContainer">
     <div id="chatbotContainer">
@@ -1010,12 +1043,19 @@ header::after{
         </div>
         <div id="aiInputContainer">
             <input type="text" id="aiInput" placeholder="Ask me anything about your trip..." autocomplete="off" />
-            <button id="voiceBtn" onclick="toggleVoiceInput()" title="Voice input" aria-label="Voice input">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button id="voiceBtn" onclick="toggleVoiceInput()" title="Voice input / mute AI voice" aria-label="Voice input">
+                <!-- Mic icon — shown when idle or listening -->
+                <svg class="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                     <line x1="12" y1="19" x2="12" y2="23"></line>
                     <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+                <!-- Speaker icon — shown when AI is speaking -->
+                <svg class="icon-speaker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                 </svg>
             </button>
             <span class="voice-status" id="voiceStatus"></span>
@@ -1078,12 +1118,12 @@ let allRegions=[], allHotels=[], allTransports=[], allDestinations=[], allAddons
 async function loadAllData(){
     try{
         const [regR,hotR,traR,desR,addR,cabR] = await Promise.all([
-            fetch(`${API_BASE}/api/regions?client_id=${CLIENT_ID}`),
-            fetch(`${API_BASE}/api/hotels?client_id=${CLIENT_ID}`),
-            fetch(`${API_BASE}/api/transports?client_id=${CLIENT_ID}`),
-            fetch(`${API_BASE}/api/destinations?client_id=${CLIENT_ID}`),
-            fetch(`${API_BASE}/api/addons?client_id=${CLIENT_ID}`),
-            fetch(`${API_BASE}/api/cabs?client_id=${CLIENT_ID}`)
+            fetch(`${API_BASE}/api/regions?client_id=${CLIENT_ID}&active_only=1`),
+            fetch(`${API_BASE}/api/hotels?client_id=${CLIENT_ID}&active_only=1`),
+            fetch(`${API_BASE}/api/transports?client_id=${CLIENT_ID}&active_only=1`),
+            fetch(`${API_BASE}/api/destinations?client_id=${CLIENT_ID}&active_only=1`),
+            fetch(`${API_BASE}/api/addons?client_id=${CLIENT_ID}&active_only=1`),
+            fetch(`${API_BASE}/api/cabs?client_id=${CLIENT_ID}&active_only=1`)
         ]);
         allRegions=await regR.json();
         allHotels=await hotR.json();
@@ -1184,6 +1224,7 @@ function isFlightTransport(transportKey){
 }
 
 window.isAIModification=false; window.lastCalculation=null; window.sessionId="session_"+Date.now(); window.cabRequired=false;
+window.voiceInteractionActive=false; // set to true when user uses microphone
 // Conversation memory — sent to backend so Sharad remembers previous messages
 window.conversationHistory=[];
 
@@ -1493,6 +1534,10 @@ function addBot(msg){
     messages.appendChild(d);
     requestAnimationFrame(()=>{requestAnimationFrame(()=>{d.style.opacity='1';});});
     scrollToBottom();
+    // Speak only if voice mode was recently used (voiceInteractionActive flag)
+    if(window.voiceInteractionActive && ttsEnabled && window.speechSynthesis){
+        speakText(msg);
+    }
 }
 function addUser(msg){const d=document.createElement('div');d.className='userMessage';d.textContent=msg;d.style.opacity='0';messages.appendChild(d);requestAnimationFrame(()=>{requestAnimationFrame(()=>{d.style.opacity='1';});});scrollToBottom();}
 function addTypingIndicator(){const t=document.createElement('div');t.className='botMessage typing-indicator';t.innerHTML='<span></span><span></span><span></span>';t.id='typingIndicator';messages.appendChild(t);scrollToBottom();}
@@ -1500,12 +1545,14 @@ function removeTypingIndicator(){const t=document.getElementById('typingIndicato
 
 function updateNavButtons(){
     const navGroup = document.getElementById('navBtnGroup');
-    if(stepHistory.length > 0){
-        navGroup.classList.remove('hidden');
-        navGroup.classList.add('visible');
-    } else {
-        navGroup.classList.remove('visible');
-        navGroup.classList.add('hidden');
+    const backBtn = document.getElementById('backBtn');
+    const adminBtn = document.getElementById('adminPanelBtn');
+    // Always show navBtnGroup (it contains the admin button)
+    navGroup.classList.remove('hidden');
+    navGroup.classList.add('visible');
+    // Back button only visible when there's history
+    if(backBtn){
+        backBtn.style.display = stepHistory.length > 0 ? '' : 'none';
     }
 }
 function goBack(){if(!stepHistory.length)return;currentStep=stepHistory.pop();optionsContainer.innerHTML="";updateNavButtons();updateSummary();renderStep();}
@@ -1692,6 +1739,20 @@ function renderStayExperience(){
             sigScroll.querySelectorAll('.magnifyOption').forEach(x=>x.classList.remove('active'));
             opt.classList.add('active');
             selectedSightseeingDays=i;
+            // Immediately render sightseeing dropdowns — no dependency on hotel nights
+            const sigParent = document.getElementById('sightseeingDynamicContainer');
+            if(sigParent) renderSightseeingSelections(sigParent.parentElement, true);
+            else {
+                // Container not yet created — will be created by renderSightseeingSelections called from parent
+                const sigConfigContainer = document.querySelector('#sightseeingDynamicContainer');
+                if(!sigConfigContainer) {
+                    // Find the sightseeing config label area and re-render
+                    const allContainers = optionsContainer.querySelectorAll('[id="sightseeingDynamicContainer"]');
+                    if(allContainers.length) renderSightseeingSelections(allContainers[0].parentElement, true);
+                    else renderSightseeingSelections(optionsContainer, true);
+                }
+            }
+            updateSummary();
         };
         sigScroll.appendChild(opt);
     }
@@ -3283,6 +3344,7 @@ async function sendAIMessage(prefill){
         tripType,
         selectedAddons,
         cab:selectedCab,
+        language: window.selectedLanguageName || 'English',
         // Enrich with human-readable display names
         transportName:selectedTransport?getTransportDisplayName(selectedTransport):null,
         hotelName:selectedHotel?getHotelDisplayName(selectedHotel):null,
@@ -3426,7 +3488,14 @@ function handleAIReply(reply){
     }
 }
 
-document.getElementById('aiInput').addEventListener('keypress',e=>{if(e.key==='Enter')sendAIMessage();});
+document.getElementById('aiInput').addEventListener('keypress',e=>{
+    if(e.key==='Enter') sendAIMessage();
+});
+// Stop voice/TTS when user types manually
+document.getElementById('aiInput').addEventListener('input',()=>{
+    window.voiceInteractionActive=false;
+    stopTTS();
+});
 
 // ── AI provider status check ──────────────────────────────────────────────
 async function checkAIStatus(){
@@ -3460,49 +3529,131 @@ async function checkAIStatus(){
     }catch(e){ /* silent — server may not have endpoint yet */ }
 }
 /* ============================================================
-   VOICE INPUT
+   VOICE INPUT + AI VOICE OUTPUT (TTS)
    ============================================================ */
-let recognition=null,isListening=false;
+let recognition=null, isListening=false;
+let ttsEnabled=true;   // user can mute AI voice
+let currentUtterance=null;
 
+/* ── Stop any ongoing TTS ── */
+function stopTTS(){
+    if(window.speechSynthesis){
+        window.speechSynthesis.cancel();
+    }
+    currentUtterance=null;
+    const btn=document.getElementById('voiceBtn');
+    if(btn){btn.classList.remove('speaking');}
+    const statusEl=document.getElementById('voiceStatus');
+    if(statusEl){statusEl.textContent='';statusEl.style.opacity='0';}
+}
+
+/* ── Speak text aloud using Web Speech Synthesis ── */
+function speakText(text){
+    if(!ttsEnabled) return;
+    if(!window.speechSynthesis) return;
+    // Strip markdown formatting for cleaner TTS
+    const clean = text
+        .replace(/\*\*(.+?)\*\*/g,'$1')
+        .replace(/\*(.+?)\*/g,'$1')
+        .replace(/^---$/gm,' ')
+        .replace(/[•\-] /gm,' ')
+        .replace(/<[^>]+>/g,' ')
+        .replace(/\s+/g,' ')
+        .trim();
+    if(!clean) return;
+
+    stopTTS(); // cancel any prior speech
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.lang = window.selectedLanguageCode || 'en-IN';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    const btn=document.getElementById('voiceBtn');
+    const statusEl=document.getElementById('voiceStatus');
+
+    utterance.onstart=()=>{
+        currentUtterance=utterance;
+        if(btn){btn.classList.remove('listening');btn.classList.add('speaking');}
+        if(statusEl){statusEl.textContent='AI speaking…';statusEl.style.opacity='1';}
+    };
+    utterance.onend=()=>{
+        currentUtterance=null;
+        if(btn){btn.classList.remove('speaking');}
+        if(statusEl){statusEl.textContent='';statusEl.style.opacity='0';}
+    };
+    utterance.onerror=()=>{
+        currentUtterance=null;
+        if(btn){btn.classList.remove('speaking');}
+        if(statusEl){statusEl.textContent='';statusEl.style.opacity='0';}
+    };
+
+    currentUtterance=utterance;
+    window.speechSynthesis.speak(utterance);
+}
+
+/* ── Toggle: if AI is speaking → mute; else start mic ── */
 function toggleVoiceInput(){
+    // If AI is speaking, pressing button mutes
+    if(currentUtterance || (window.speechSynthesis && window.speechSynthesis.speaking)){
+        ttsEnabled=false;
+        stopTTS();
+        const statusEl=document.getElementById('voiceStatus');
+        if(statusEl){statusEl.textContent='Muted';statusEl.style.opacity='1';}
+        setTimeout(()=>{if(statusEl){statusEl.textContent='';statusEl.style.opacity='0';}},1500);
+        return;
+    }
+
     if(!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)){
         addBot("Voice input is not supported in your browser. Please use Chrome.");
         return;
     }
+
     if(isListening){
         if(recognition) recognition.stop();
         isListening=false;
-        document.getElementById('voiceBtn').classList.remove('listening');
-        document.getElementById('voiceStatus').style.opacity='0';
+        const btn=document.getElementById('voiceBtn');
+        if(btn){btn.classList.remove('listening');}
+        const statusEl=document.getElementById('voiceStatus');
+        if(statusEl){statusEl.style.opacity='0';}
         return;
     }
+
+    // Re-enable TTS when user uses mic again
+    ttsEnabled=true;
+
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     recognition=new SpeechRecognition();
-    recognition.lang='en-IN';
+    recognition.lang=window.selectedLanguageCode||'en-IN';
     recognition.interimResults=false;
     recognition.maxAlternatives=1;
     recognition.onstart=()=>{
         isListening=true;
-        document.getElementById('voiceBtn').classList.add('listening');
+        const btn=document.getElementById('voiceBtn');
+        if(btn){btn.classList.add('listening');}
         const statusEl=document.getElementById('voiceStatus');
-        statusEl.textContent='Listening…';
-        statusEl.style.opacity='1';
+        if(statusEl){statusEl.textContent='Listening…';statusEl.style.opacity='1';}
     };
     recognition.onresult=(event)=>{
         const transcript=event.results[0][0].transcript;
         document.getElementById('aiInput').value=transcript;
+        window.voiceInteractionActive = true; // activate TTS for AI responses
         sendAIMessage();
     };
     recognition.onerror=()=>{
         isListening=false;
-        document.getElementById('voiceBtn').classList.remove('listening');
-        document.getElementById('voiceStatus').style.opacity='0';
+        const btn=document.getElementById('voiceBtn');
+        if(btn){btn.classList.remove('listening');}
+        const statusEl=document.getElementById('voiceStatus');
+        if(statusEl){statusEl.style.opacity='0';}
         addBot("Voice input error. Please try again.");
     };
     recognition.onend=()=>{
         isListening=false;
-        document.getElementById('voiceBtn').classList.remove('listening');
-        document.getElementById('voiceStatus').style.opacity='0';
+        const btn=document.getElementById('voiceBtn');
+        if(btn){btn.classList.remove('listening');}
+        const statusEl=document.getElementById('voiceStatus');
+        if(statusEl){statusEl.style.opacity='0';}
     };
     recognition.start();
 }
@@ -3515,6 +3666,156 @@ window.addEventListener('DOMContentLoaded', async()=>{
     renderStep();
     checkAIStatus();  // show which AI provider is active
 });
+
+/* ============================================================
+   MULTI-LANGUAGE SUPPORT
+   ============================================================ */
+window.selectedLanguageCode = 'en-IN';
+window.selectedLanguageName = 'English';
+
+const LANGUAGE_NAMES = {
+  'en-IN': 'English',
+  'hi-IN': 'Hindi',
+  'mr-IN': 'Marathi',
+  'gu-IN': 'Gujarati',
+  'ta-IN': 'Tamil',
+  'te-IN': 'Telugu',
+  'kn-IN': 'Kannada',
+  'bn-IN': 'Bengali',
+  'ar':    'Arabic',
+  'zh-CN': 'Chinese',
+  'fr':    'French',
+  'de':    'German',
+  'ru':    'Russian',
+};
+
+// UI text translations for static UI elements
+const UI_TRANSLATIONS = {
+  'en-IN': {
+    placeholder: 'Ask me anything about your trip...',
+    send: 'Send',
+    tripSummary: '📋 Trip Summary',
+    waiting: 'Waiting for inputs…',
+    complete: 'Complete the steps to see your price quote.',
+    aiInput: 'Ask me anything about your trip...',
+  },
+  'hi-IN': {
+    placeholder: 'अपनी यात्रा के बारे में पूछें...',
+    send: 'भेजें',
+    tripSummary: '📋 यात्रा सारांश',
+    waiting: 'इनपुट का इंतज़ार...',
+    complete: 'मूल्य जानने के लिए सभी चरण पूरे करें।',
+    aiInput: 'अपनी यात्रा के बारे में पूछें...',
+  },
+  'mr-IN': {
+    placeholder: 'तुमच्या सहलीबद्दल विचारा...',
+    send: 'पाठवा',
+    tripSummary: '📋 सहल सारांश',
+    waiting: 'इनपुटची वाट पाहत...',
+    complete: 'किंमत पाहण्यासाठी सर्व टप्पे पूर्ण करा.',
+    aiInput: 'तुमच्या सहलीबद्दल विचारा...',
+  },
+  'gu-IN': {
+    placeholder: 'તમારી યાત્રા વિશે પૂછો...',
+    send: 'મોકલો',
+    tripSummary: '📋 યાત્રા સારાંશ',
+    waiting: 'ઇનપુટ માટે રાહ જોઈ...',
+    complete: 'કિંમત જાણવા બધાં પગલાં પૂરા કરો.',
+    aiInput: 'તમારી યાત્રા વિશે પૂછો...',
+  },
+  'ta-IN': {
+    placeholder: 'உங்கள் பயணத்தைப் பற்றி கேளுங்கள்...',
+    send: 'அனுப்பு',
+    tripSummary: '📋 பயண சுருக்கம்',
+    waiting: 'உள்ளீடுகளுக்காக காத்திருக்கிறது...',
+    complete: 'விலை காண அனைத்து படிகளையும் முடிக்கவும்.',
+    aiInput: 'உங்கள் பயணத்தைப் பற்றி கேளுங்கள்...',
+  },
+  'ar': {
+    placeholder: 'اسألني عن رحلتك...',
+    send: 'إرسال',
+    tripSummary: '📋 ملخص الرحلة',
+    waiting: 'في انتظار المدخلات...',
+    complete: 'أكمل الخطوات لعرض عرض السعر.',
+    aiInput: 'اسألني عن رحلتك...',
+  },
+  'zh-CN': {
+    placeholder: '询问您的旅行计划...',
+    send: '发送',
+    tripSummary: '📋 行程摘要',
+    waiting: '等待输入...',
+    complete: '完成步骤以查看报价。',
+    aiInput: '询问您的旅行计划...',
+  },
+  'fr': {
+    placeholder: "Demandez-moi n\'importe quoi sur votre voyage...",
+    send: 'Envoyer',
+    tripSummary: '📋 Résumé du voyage',
+    waiting: 'En attente de saisie...',
+    complete: 'Complétez les étapes pour voir votre devis.',
+    aiInput: "Demandez-moi n\'importe quoi sur votre voyage...",
+  },
+  'de': {
+    placeholder: 'Fragen Sie mich zu Ihrer Reise...',
+    send: 'Senden',
+    tripSummary: '📋 Reisezusammenfassung',
+    waiting: 'Warte auf Eingaben...',
+    complete: 'Vervollständigen Sie die Schritte für ein Preisangebot.',
+    aiInput: 'Fragen Sie mich zu Ihrer Reise...',
+  },
+};
+
+function changeLanguage(langCode) {
+    window.selectedLanguageCode = langCode;
+    window.selectedLanguageName = LANGUAGE_NAMES[langCode] || 'English';
+
+    // Update voice recognition language
+    if(recognition && isListening) {
+        recognition.stop();
+    }
+
+    // Update UI text
+    const t = UI_TRANSLATIONS[langCode] || UI_TRANSLATIONS['en-IN'];
+
+    const aiInputEl = document.getElementById('aiInput');
+    if(aiInputEl) aiInputEl.placeholder = t.placeholder;
+
+    const aiInputBtn = document.getElementById('aiInputBtn');
+    if(aiInputBtn) aiInputBtn.textContent = t.send;
+
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if(sidebarToggle) sidebarToggle.textContent = t.tripSummary;
+
+    const summarySidebar = document.querySelector('#sidebar .summary');
+    if(summarySidebar && summarySidebar.innerHTML.trim().startsWith('Waiting') || 
+       (summarySidebar && !window.lastCalculation)) {
+        // Don't change dynamic content
+    }
+
+    // Persist in session for AI responses
+    sessionStorage.setItem('selectedLanguage', langCode);
+
+    // Inform AI of language change via a system message in conversation
+    if(langCode !== 'en-IN') {
+        const langMsg = `[Language changed to ${window.selectedLanguageName}. Please respond in ${window.selectedLanguageName} from now on.]`;
+        window.conversationHistory.push({role:'user', content: langMsg});
+        window.conversationHistory.push({role:'assistant', content: `Understood! I'll respond in ${window.selectedLanguageName} now. 😊`});
+    } else {
+        // Remove any language override messages
+        window.conversationHistory = window.conversationHistory.filter(
+            h => !h.content.includes('[Language changed')
+        );
+    }
+}
+
+// Restore language preference from session
+(function restoreLanguage(){
+    const saved = sessionStorage.getItem('selectedLanguage');
+    if(saved) {
+        const sel = document.getElementById('langSelect');
+        if(sel) sel.value = saved;
+        changeLanguage(saved);
+    }
+})();
+
 </script>
-</body>
-</html>

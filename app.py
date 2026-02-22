@@ -422,31 +422,9 @@ def get_client_id():
 # Tracks (ip, endpoint) pairs with a sliding-window counter.
 # =====================================================
 
-_rate_limit_store: dict = defaultdict(list)
-RATE_LIMIT_WINDOW_SECONDS = 60  # 1-minute rolling window
-RATE_LIMIT_MAX_CALLS = 20       # max calls per IP per window per endpoint
+# Rate limiting removed — all endpoints are unrestricted.
+# _get_client_ip() is kept below as it is still used for logging.
 
-
-def _check_rate_limit(ip: str, endpoint: str) -> bool:
-    """
-    Returns True if request is allowed, False if rate limit exceeded.
-    Uses a sliding window approach. Thread-safe for single-process deployments.
-    In multi-process deployments (gunicorn), a shared store (Redis) would be preferred,
-    but this in-memory approach is safe for the current single-worker setup.
-    """
-    key = f"{ip}:{endpoint}"
-    now = time.time()
-    window_start = now - RATE_LIMIT_WINDOW_SECONDS
-
-    # Prune timestamps outside the window
-    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if t > window_start]
-
-    if len(_rate_limit_store[key]) >= RATE_LIMIT_MAX_CALLS:
-        logger.warning(f"Rate limit exceeded for {key}: {len(_rate_limit_store[key])} calls in {RATE_LIMIT_WINDOW_SECONDS}s")
-        return False
-
-    _rate_limit_store[key].append(now)
-    return True
 
 
 def _get_client_ip() -> str:
@@ -2556,27 +2534,29 @@ def delete_client(cid):
 def list_regions():
     client_id = get_client_id()
     region_type = request.args.get('type')  # 'domestic' or 'international'
+    active_only = request.args.get('active_only') in ('1', 'true', 'True', 'yes')
 
     db = get_db()
     cur = db.cursor()
     try:
+        active_clause = " AND active=TRUE" if active_only else ""
         if region_type == 'domestic':
             cur.execute(
-                """SELECT * FROM regions
-                   WHERE client_id=%s AND is_domestic=TRUE
+                f"""SELECT * FROM regions
+                   WHERE client_id=%s AND is_domestic=TRUE{active_clause}
                    ORDER BY name""",
                 (client_id,)
             )
         elif region_type == 'international':
             cur.execute(
-                """SELECT * FROM regions
-                   WHERE client_id=%s AND is_domestic=FALSE
+                f"""SELECT * FROM regions
+                   WHERE client_id=%s AND is_domestic=FALSE{active_clause}
                    ORDER BY name""",
                 (client_id,)
             )
         else:
             cur.execute(
-                "SELECT * FROM regions WHERE client_id=%s ORDER BY is_domestic DESC, name",
+                f"SELECT * FROM regions WHERE client_id=%s{active_clause} ORDER BY is_domestic DESC, name",
                 (client_id,)
             )
 
@@ -2746,11 +2726,13 @@ def delete_region(rid):
 @app.route('/api/transports', methods=['GET'])
 def list_transports():
     client_id = get_client_id()
+    active_only = request.args.get('active_only') in ('1', 'true', 'True', 'yes')
     db = get_db()
     cur = db.cursor()
     try:
+        active_clause = " AND active=TRUE" if active_only else ""
         cur.execute(
-            "SELECT * FROM transports WHERE client_id=%s ORDER BY name",
+            f"SELECT * FROM transports WHERE client_id=%s{active_clause} ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -2909,11 +2891,13 @@ def delete_transport(tid):
 @app.route('/api/hotels', methods=['GET'])
 def list_hotels():
     client_id = get_client_id()
+    active_only = request.args.get('active_only') in ('1', 'true', 'True', 'yes')
     db = get_db()
     cur = db.cursor()
     try:
+        active_clause = " AND active=TRUE" if active_only else ""
         cur.execute(
-            "SELECT * FROM hotels WHERE client_id=%s ORDER BY name",
+            f"SELECT * FROM hotels WHERE client_id=%s{active_clause} ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -3094,11 +3078,13 @@ def delete_hotel(hid):
 @app.route('/api/destinations', methods=['GET'])
 def list_destinations():
     client_id = get_client_id()
+    active_only = request.args.get('active_only') in ('1', 'true', 'True', 'yes')
     db = get_db()
     cur = db.cursor()
     try:
+        active_clause = " AND active=TRUE" if active_only else ""
         cur.execute(
-            "SELECT * FROM destinations WHERE client_id=%s ORDER BY name",
+            f"SELECT * FROM destinations WHERE client_id=%s{active_clause} ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -3260,11 +3246,13 @@ def delete_destination(did):
 @app.route('/api/cabs', methods=['GET'])
 def list_cabs():
     client_id = get_client_id()
+    active_only = request.args.get('active_only') in ('1', 'true', 'True', 'yes')
     db = get_db()
     cur = db.cursor()
     try:
+        active_clause = " AND active=TRUE" if active_only else ""
         cur.execute(
-            "SELECT * FROM cabs WHERE client_id=%s ORDER BY name",
+            f"SELECT * FROM cabs WHERE client_id=%s{active_clause} ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -3559,11 +3547,13 @@ def cab_destination_matrix():
 @app.route('/api/addons', methods=['GET'])
 def list_addons():
     client_id = get_client_id()
+    active_only = request.args.get('active_only') in ('1', 'true', 'True', 'yes')
     db = get_db()
     cur = db.cursor()
     try:
+        active_clause = " AND active=TRUE" if active_only else ""
         cur.execute(
-            "SELECT * FROM addons WHERE client_id=%s ORDER BY name",
+            f"SELECT * FROM addons WHERE client_id=%s{active_clause} ORDER BY name",
             (client_id,)
         )
         result = rows_to_dicts(cur, cur.fetchall())
@@ -5657,7 +5647,7 @@ def hotel_search():
 # Calls Amadeus Hotel Name Autocomplete API (v1/reference-data/locations/hotel).
 # Returns structured JSON with hotel_name, hotelId, city, country.
 # API key is NEVER exposed in any response.
-# Basic rate limiting applied via _check_rate_limit().
+# Rate limiting has been removed — endpoints are unrestricted.
 # =====================================================
 
 def _fetch_hotel_autocomplete(keyword: str, max_results: int = 10) -> list:
@@ -5805,7 +5795,7 @@ def hotel_lookup():
 
     Security:
       - API key is NEVER included in any response
-      - Basic rate limiting: {RATE_LIMIT_MAX_CALLS} calls per IP per {RATE_LIMIT_WINDOW_SECONDS}s
+      - Rate limiting: disabled (removed)
       - Keyword is sanitised before forwarding to Amadeus
     """
     try:
@@ -7315,15 +7305,42 @@ def _ai_process_anthropic(message, state, last_calc, hotels, transports, destina
         f"ADD-ONS: {_opts(addons)}"
     )
 
+    # Extract language preference from state if provided
+    user_language = state.get('language', 'English') if isinstance(state, dict) else 'English'
+    lang_instruction = (
+        f"\n\nLANGUAGE: The user's selected language is **{user_language}**. "
+        f"Respond ENTIRELY in {user_language}. All messages, greetings, and explanations must be in {user_language}."
+        if user_language != 'English' else ""
+    )
+
     system = f"""You are Sharad, a warm and experienced travel sales advisor at {client_name}.
 You have 15+ years helping Indian travellers plan dream holidays. You are knowledgeable, enthusiastic, and friendly.
 You speak like a trusted friend who happens to be a travel expert. You remember the entire conversation naturally.
-Use occasional emojis tastefully.
+Use occasional emojis tastefully.{lang_instruction}
 
 {pkg_ctx}
 
 AVAILABLE OPTIONS (use exact keys when setting values):
 {opts}
+
+INTENT RECOGNITION — understand these patterns and act accordingly:
+
+BUDGET SEARCH (e.g. "budget under 50000", "cheap trip", "affordable package", "what can I get in X rupees"):
+→ Use MULTI_ACTION to suggest a package matching the budget, set destination/transport/hotel/nights accordingly.
+→ Then use READY_TO_CALCULATE to show the price. Never estimate prices yourself.
+
+MODIFY PACKAGE (e.g. "change hotel", "fewer nights", "add insurance", "upgrade transport", "remove X"):
+→ Use the appropriate SET_* or ADD_ADDON/REMOVE_ADDON action. Apply changes immediately via MULTI_ACTION if multiple changes.
+→ After state changes, ALWAYS auto-trigger READY_TO_CALCULATE to show updated price.
+
+GENERAL CHAT (e.g. "tell me about Goa", "best time to visit", "visa requirements", "what to pack"):
+→ Use GENERAL_CHAT and answer knowledgeably. No price calculation needed.
+
+PACKAGE EXPLANATION (e.g. "explain my package", "what's included", "break it down"):
+→ Use EXPLAIN_PACKAGE with a warm, narrative description of everything included.
+
+UPGRADE SUGGESTION (e.g. "make it better", "luxury option", "best experience"):
+→ Use SUGGEST_UPGRADE or MULTI_ACTION to upgrade components.
 
 RESPONSE FORMAT — always return a single valid JSON object, no markdown fences:
 
@@ -7334,12 +7351,14 @@ VALID ACTIONS: SET_DESTINATION, SET_HOTEL, SET_TRANSPORT, SET_CAB, SET_ADULTS, S
 SET_NIGHTS, SET_ROOMS, SET_SEASON (ON/OFF), ADD_ADDON, REMOVE_ADDON,
 READY_TO_CALCULATE, EXPLAIN_PACKAGE, SUGGEST_UPGRADE, ASK_FIELD, GENERAL_CHAT, MULTI_ACTION
 
-CRITICAL: NEVER state, estimate or calculate any price. Use READY_TO_CALCULATE to trigger the pricing engine.
-You may reference prices already shown in the breakdown above.
-
-For GENERAL_CHAT about destinations, attractions, weather, food, visa etc — answer knowledgeably and helpfully.
-For EXPLAIN_PACKAGE — give a warm narrative of the full trip, not a list.
-For package suggestions — ask about interests/budget/group type, then use MULTI_ACTION to set everything."""
+CRITICAL RULES:
+- NEVER state, estimate or calculate any price yourself. Use READY_TO_CALCULATE to trigger the pricing engine.
+- You MAY reference prices already shown in the breakdown above.
+- When the user asks about budget, set a realistic package then call READY_TO_CALCULATE.
+- When modifying package state, ALWAYS call READY_TO_CALCULATE afterwards (include it in MULTI_ACTION actions list as last item, or respond with READY_TO_CALCULATE as action after state change).
+- Use exact internal_name keys from AVAILABLE OPTIONS when setting values.
+- For EXPLAIN_PACKAGE — give a warm narrative of the full trip, not a bullet list.
+- For package suggestions — ask about interests/budget/group type if unclear, then use MULTI_ACTION to set everything."""
 
     # Build conversation history for Anthropic format
     anthropic_msgs = []
@@ -7520,6 +7539,14 @@ def _ai_process(message, state, last_calc, hotels, transports, destinations, add
 
         pkg_ctx = _ai_build_package_context(state, last_calc)
 
+        # Extract language preference from state
+        user_language = state.get('language', 'English') if isinstance(state, dict) else 'English'
+        lang_instruction = (
+            f"\n\nLANGUAGE: The user's selected language is **{user_language}**. "
+            f"Respond ENTIRELY in {user_language}. All messages must be in {user_language}."
+            if user_language != 'English' else ""
+        )
+
         # Format available options with keys clearly labelled
         def _opts(items, name_key='name', key_key='key'):
             return ' | '.join(f'{i[name_key]} [key:{i[key_key]}]' for i in items) or 'none available'
@@ -7535,7 +7562,7 @@ def _ai_process(message, state, last_calc, hotels, transports, destinations, add
         system = f"""You are Sharad, a warm and experienced travel sales advisor at {client_name}.
 You have 15+ years helping Indian travellers plan dream holidays. You are knowledgeable, enthusiastic, and friendly — never pushy.
 You speak like a trusted friend who happens to be a travel expert. You remember the entire conversation and reference it naturally.
-Use occasional emojis tastefully. Address the user personally and warmly.
+Use occasional emojis tastefully. Address the user personally and warmly.{lang_instruction}
 
 {pkg_ctx}
 
@@ -7569,10 +7596,23 @@ NEVER state, estimate, guess, or calculate any price yourself. The backend prici
 You may REFERENCE prices already shown in the breakdown above (those came from the engine).
 To get a price: use READY_TO_CALCULATE.
 
+━━━ INTENT RECOGNITION ━━━
+BUDGET SEARCH ("budget under 50000", "cheap trip", "affordable", "what can I get in X rupees"):
+→ Use MULTI_ACTION to build a realistic package within budget, then add READY_TO_CALCULATE at end of actions.
+
+MODIFY PACKAGE ("change hotel", "fewer nights", "add insurance", "upgrade", "remove X"):
+→ Apply changes immediately with SET_* or MULTI_ACTION. Always follow with READY_TO_CALCULATE.
+
+GENERAL CHAT ("tell me about Goa", "best time to visit", "visa requirements", "weather"):
+→ Use GENERAL_CHAT with web_search if needed. No price calculation.
+
+PACKAGE EXPLANATION ("explain my package", "what's included"):
+→ Use EXPLAIN_PACKAGE with warm narrative. Not a bullet list.
+
 ━━━ OUTPUT FORMAT ━━━
 Always return a single valid JSON object. No markdown fences. No extra text outside the JSON.
 Your "message" field is shown directly to the user — make it warm, conversational, and helpful.
-Use line breaks (\\n) in messages where natural. Bold important words with **word**.
+Use line breaks (\n) in messages where natural. Bold important words with **word**.
 
 ━━━ PACKAGE EXPLANATION STYLE ━━━
 When explaining, don't list fields — narrate: "You're headed to stunning Goa for 5 nights...

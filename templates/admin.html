@@ -1170,7 +1170,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             <option value="">Select Trip Type</option>
                             <option value="one_way">One Way</option>
                             <option value="return">Return</option>
-                            <option value="both">Both</option>
                         </select>
                     </div>
                     <div class="form-group multiplier-group hidden-field" id="transportReturnMultiplierGrp">
@@ -1916,7 +1915,6 @@ function editTransport(id) {
                 <select id="editTransTripType" onchange="onTripTypeChange('editTransTripType','editTransMultGrp')">
                     <option value="one_way" ${tripType==='one_way'?'selected':''}>One Way</option>
                     <option value="return" ${tripType==='return'?'selected':''}>Return</option>
-                    <option value="both" ${tripType==='both'?'selected':''}>Both</option>
                 </select>
             </div>
             <div class="form-group multiplier-group ${isOneWay ? 'hidden-field' : ''}" id="editTransMultGrp">
