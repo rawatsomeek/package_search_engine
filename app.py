@@ -242,6 +242,34 @@ _log_ai_provider_status()
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 CORS(app)
 
+
+# =====================================================
+# AUTO DB INIT — Run schema.sql on startup
+# =====================================================
+# Ensures all tables exist on every deploy (local + Render).
+# Completely safe to run repeatedly — schema uses IF NOT EXISTS.
+# Fixes "relation does not exist" errors on fresh Render deployments.
+# =====================================================
+
+def _auto_init_db():
+    """Run schema.sql on startup if tables are missing. Safe — uses IF NOT EXISTS."""
+    try:
+        schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
+        if not os.path.exists(schema_path):
+            logger.warning("schema.sql not found — skipping auto-init")
+            return
+        db = get_db()
+        cur = db.cursor()
+        with open(schema_path, 'r') as f:
+            cur.execute(f.read())
+        db.commit()
+        db.close()
+        logger.info("✅ DB auto-init complete — all tables verified")
+    except Exception as e:
+        logger.error(f"DB auto-init failed: {e}", exc_info=True)
+
+_auto_init_db()
+
 # =====================================================
 # DATABASE
 # =====================================================
