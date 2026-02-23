@@ -4458,6 +4458,92 @@ def _convert_to_inr(amount: float, currency: str) -> float:
     return converted
 
 
+# ── IATA city/airport code lookup ─────────────────────────────────────────────
+# Used to resolve destination names/keys to Amadeus IATA codes for live search.
+_DEST_NAME_TO_IATA = {
+    # Goa
+    'goa': ('GOI', 'GOA'), 'calangute': ('GOI', 'GOA'), 'calangute-beach': ('GOI', 'GOA'),
+    'baga': ('GOI', 'GOA'), 'anjuna': ('GOI', 'GOA'), 'panjim': ('GOI', 'GOA'),
+    'north-goa': ('GOI', 'GOA'), 'south-goa': ('GOI', 'GOA'),
+    # Rajasthan
+    'jaipur': ('JAI', 'JAI'), 'jodhpur': ('JDH', 'JDH'), 'udaipur': ('UDR', 'UDR'),
+    'jaisalmer': ('JSA', 'JSA'), 'bikaner': ('BKB', 'BKB'), 'kota': ('KTU', 'KTU'),
+    # Maharashtra
+    'mumbai': ('BOM', 'BOM'), 'pune': ('PNQ', 'PNQ'), 'aurangabad': ('IXU', 'IXU'),
+    'nashik': ('ISK', 'ISK'), 'kolhapur': ('KLH', 'KLH'),
+    # Karnataka
+    'bangalore': ('BLR', 'BLR'), 'bengaluru': ('BLR', 'BLR'), 'mysore': ('MYQ', 'MYQ'),
+    'mysuru': ('MYQ', 'MYQ'), 'hampi': ('HMP', 'BLR'), 'coorg': ('BLR', 'BLR'),
+    'mangalore': ('IXE', 'IXE'),
+    # Tamil Nadu
+    'chennai': ('MAA', 'MAA'), 'madurai': ('IXM', 'IXM'), 'coimbatore': ('CJB', 'CJB'),
+    'ooty': ('CJB', 'CJB'), 'mahabalipuram': ('MAA', 'MAA'),
+    # Kerala
+    'kerala': ('COK', 'COK'), 'kochi': ('COK', 'COK'), 'cochin': ('COK', 'COK'),
+    'trivandrum': ('TRV', 'TRV'), 'thiruvananthapuram': ('TRV', 'TRV'),
+    'munnar': ('COK', 'COK'), 'alleppey': ('COK', 'COK'), 'alappuzha': ('COK', 'COK'),
+    'kovalam': ('TRV', 'TRV'), 'varkala': ('TRV', 'TRV'),
+    # Himachal Pradesh
+    'manali': ('KUU', 'KUU'), 'shimla': ('SLV', 'SLV'), 'dharamshala': ('DHM', 'DHM'),
+    'kullu': ('KUU', 'KUU'), 'kasol': ('KUU', 'KUU'),
+    # Uttarakhand
+    'dehradun': ('DED', 'DED'), 'haridwar': ('DED', 'DED'), 'rishikesh': ('DED', 'DED'),
+    'mussoorie': ('DED', 'DED'), 'nainital': ('PGH', 'PGH'), 'jim-corbett': ('PGH', 'PGH'),
+    # Delhi & NCR
+    'delhi': ('DEL', 'DEL'), 'new-delhi': ('DEL', 'DEL'), 'agra': ('AGR', 'AGR'),
+    # Andhra / Telangana
+    'hyderabad': ('HYD', 'HYD'), 'visakhapatnam': ('VTZ', 'VTZ'), 'vizag': ('VTZ', 'VTZ'),
+    'tirupati': ('TIR', 'TIR'),
+    # West Bengal
+    'kolkata': ('CCU', 'CCU'), 'darjeeling': ('IXB', 'IXB'), 'siliguri': ('IXB', 'IXB'),
+    # Assam / Northeast
+    'guwahati': ('GAU', 'GAU'), 'shillong': ('SHL', 'SHL'), 'kaziranga': ('JRH', 'JRH'),
+    # Gujarat
+    'ahmedabad': ('AMD', 'AMD'), 'vadodara': ('BDQ', 'BDQ'), 'surat': ('STV', 'STV'),
+    # Punjab / Chandigarh
+    'amritsar': ('ATQ', 'ATQ'), 'chandigarh': ('IXC', 'IXC'), 'ludhiana': ('LUH', 'IXC'),
+    # J&K
+    'srinagar': ('SXR', 'SXR'), 'jammu': ('IXJ', 'IXJ'), 'leh': ('IXL', 'IXL'),
+    'kashmir': ('SXR', 'SXR'),
+    # Andaman
+    'port-blair': ('IXZ', 'IXZ'), 'andaman': ('IXZ', 'IXZ'),
+    # Uttar Pradesh
+    'varanasi': ('VNS', 'VNS'), 'lucknow': ('LKO', 'LKO'), 'allahabad': ('IXD', 'IXD'),
+    # Bihar
+    'patna': ('PAT', 'PAT'),
+    # Odisha
+    'bhubaneswar': ('BBI', 'BBI'),
+}
+
+
+def _resolve_destination_iata(destination_key: str, city_code_hint: str = '', dest_iata_hint: str = '') -> tuple:
+    """
+    Resolve a destination internal_name / display_name to (airport_iata, city_iata).
+    Returns ('', '') if unknown — caller should use AI-provided cityCode instead.
+    Priority: hints from AI > lookup table > empty string.
+    """
+    # Use AI-provided hints first (most reliable since AI knows the destination)
+    if dest_iata_hint and city_code_hint:
+        return (dest_iata_hint.upper().strip(), city_code_hint.upper().strip())
+    if dest_iata_hint:
+        return (dest_iata_hint.upper().strip(), dest_iata_hint.upper().strip()[:3])
+    if city_code_hint and len(city_code_hint) == 3:
+        # cityCode is already an IATA code
+        return (city_code_hint.upper().strip(), city_code_hint.upper().strip())
+
+    # Fallback: lookup table
+    key = destination_key.lower().strip()
+    if key in _DEST_NAME_TO_IATA:
+        return _DEST_NAME_TO_IATA[key]
+
+    # Try partial match
+    for k, v in _DEST_NAME_TO_IATA.items():
+        if k in key or key in k:
+            return v
+
+    return ('', '')
+
+
 # =====================================================
 # FLIGHT SEARCH — Amadeus v2 shopping/flight-offers
 # =====================================================
@@ -6155,6 +6241,98 @@ def _build_amadeus_hotel_booking_body(offer_id: str, guests: list) -> dict:
     }
 
 
+@app.route('/api/flight-price-verify', methods=['POST'])
+def flight_price_verify():
+    """
+    Re-confirm flight offer price with Amadeus before booking.
+    Calls POST /v1/shopping/flight-offers/pricing with the cached raw offer.
+    Returns verified price and updated offer details.
+
+    Request: { "flight_offer_id": "...", "adults": 2, "children": 0 }
+    Response: { "success": bool, "verified": bool, "price": float, "currency": "INR",
+                "offer": <updated_normalized_offer>, "error": str }
+    """
+    try:
+        data = request.get_json() or {}
+        flight_offer_id = str(data.get('flight_offer_id', '') or '').strip()
+        if not flight_offer_id:
+            return jsonify({'success': False, 'error': 'flight_offer_id required'}), 400
+
+        raw_offer = _get_raw_flight_offer(flight_offer_id)
+        if not raw_offer:
+            return jsonify({
+                'success': False,
+                'verified': False,
+                'error': 'Flight offer expired or not found. Please search again.',
+            }), 200
+
+        base_url = _get_amadeus_base_url()
+        url = f'{base_url}/v1/shopping/flight-offers/pricing'
+        body = {
+            'data': {
+                'type': 'flight-offers-pricing',
+                'flightOffers': [raw_offer],
+            }
+        }
+
+        try:
+            resp = _amadeus_post_request(url, body, timeout=20)
+        except Exception as pe:
+            logger.error(f"flight-price-verify Amadeus error: {pe}")
+            # Return the original cached price as fallback
+            price = float((raw_offer.get('price', {}).get('grandTotal') or raw_offer.get('price', {}).get('total') or 0))
+            return jsonify({
+                'success': True,
+                'verified': False,
+                'price': price,
+                'currency': 'INR',
+                'note': 'Price unverified — using cached value',
+            })
+
+        if not resp.ok:
+            err_body = {}
+            try: err_body = resp.json()
+            except Exception: pass
+            errs = err_body.get('errors', [])
+            msg = errs[0].get('title', 'Price verification failed') if errs else f'HTTP {resp.status_code}'
+            logger.warning(f"flight-price-verify failed: {msg}")
+            # Fallback to cached
+            price = float((raw_offer.get('price', {}).get('grandTotal') or raw_offer.get('price', {}).get('total') or 0))
+            return jsonify({
+                'success': True,
+                'verified': False,
+                'price': price,
+                'currency': 'INR',
+                'note': f'Verification failed ({msg}), using cached price',
+            })
+
+        result = resp.json()
+        updated_offers = result.get('data', {}).get('flightOffers', [raw_offer])
+        updated_offer = updated_offers[0] if updated_offers else raw_offer
+
+        # Cache the updated (verified) offer
+        updated_price_raw = updated_offer.get('price', {})
+        verified_price = float(updated_price_raw.get('grandTotal') or updated_price_raw.get('total') or 0)
+        _store_raw_flight_offer(flight_offer_id, updated_offer)
+
+        # Normalize the verified offer for frontend
+        normalized = _normalize_flight_offers([updated_offer], 'return' if len(updated_offer.get('itineraries', [])) > 1 else 'one_way')
+        norm_offer = normalized[0] if normalized else None
+
+        logger.info(f"flight-price-verify: offer {flight_offer_id} verified at {verified_price} INR")
+        return jsonify({
+            'success': True,
+            'verified': True,
+            'price': verified_price,
+            'currency': 'INR',
+            'offer': norm_offer,
+        })
+
+    except Exception as e:
+        logger.error(f'flight-price-verify error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/create-booking', methods=['POST'])
 def create_booking():
     """
@@ -7315,21 +7493,40 @@ AVAILABLE OPTIONS (use exact keys when setting values):
 
 INTENT RECOGNITION — understand these patterns and act accordingly:
 
-BUDGET SEARCH (e.g. "budget under 50000", "cheap trip", "affordable package", "what can I get in X rupees"):
-→ Use MULTI_ACTION to suggest a package matching the budget, set destination/transport/hotel/nights accordingly.
-→ Then use READY_TO_CALCULATE to show the price. Never estimate prices yourself.
+PACKAGE DISCOVERY / SUGGESTIONS — USE GENERATE_PACKAGES WITH LIVE DATA:
+Triggers: "plan a trip to X", "suggest packages for X", "show options", "I want to go to X",
+"find packages", "honeymoon trip", "family vacation", "budget trip", "I have N people for N nights".
 
-MODIFY PACKAGE (e.g. "change hotel", "fewer nights", "add insurance", "upgrade transport", "remove X"):
+STEP 1: Identify destination from DESTINATIONS list.
+STEP 2: Collect flight details for live Amadeus search:
+  - origin: departure city IATA code (DEL, BOM, BLR, CCU, HYD, MAA, AMD, PNQ, COK) — ask if missing
+  - departureDate: YYYY-MM-DD — ask if missing  
+  - returnDate: optional for round-trip
+  Ask ONE missing field at a time. Once destination + origin + departureDate known → GENERATE_PACKAGES.
+STEP 3: GENERATE_PACKAGES format MUST include live search params:
+  {{"action":"GENERATE_PACKAGES","intent":{{"destination":"exact_key_from_options","nights":3,"adults":2,"children":0,"season":"ON","travel_type":"general","budget":null,"origin":"DEL","destination_iata":"GOI","cityCode":"GOA","departureDate":"2026-03-20","returnDate":null,"trip_type":"one_way"}},"message":"Fetching live Amadeus flights & hotels and building packages! 🔍✈️"}}
+
+destination_iata = airport IATA (GOI=Goa, BOM=Mumbai, DEL=Delhi, BLR=Bangalore, HYD=Hyderabad, MAA=Chennai, CCU=Kolkata, AMD=Ahmedabad, PNQ=Pune, COK=Kochi, SXR=Srinagar, ATQ=Amritsar, VNS=Varanasi, TRV=Trivandrum).
+cityCode = Amadeus hotel city code (GOA=Goa, BOM=Mumbai, DEL=Delhi, BLR=Bangalore — usually same as major city).
+
+BUDGET SEARCH ("budget under 50000", "what can I get in X rupees", "cheap trip"):
+→ Use GENERATE_PACKAGES with travel_type="budget" and budget=<amount>. Ask destination + origin + date.
+
+EXPLICIT LIVE SEARCH ("search live flights", "find flights now", "real-time availability"):
+→ Use FETCH_LIVE_DATA format:
+  {{"action":"FETCH_LIVE_DATA","params":{{"origin":"DEL","destination":"GOI","departureDate":"2026-03-15","returnDate":"2026-03-20","adults":2,"children":0,"trip_type":"return","cityCode":"GOA"}},"message":"Searching live Amadeus inventory! ✈️🏨"}}
+
+MODIFY PACKAGE ("change hotel", "fewer nights", "add insurance", "upgrade transport", "remove X"):
 → Use the appropriate SET_* or ADD_ADDON/REMOVE_ADDON action. Apply changes immediately via MULTI_ACTION if multiple changes.
 → After state changes, ALWAYS auto-trigger READY_TO_CALCULATE to show updated price.
 
-GENERAL CHAT (e.g. "tell me about Goa", "best time to visit", "visa requirements", "what to pack"):
+GENERAL CHAT ("tell me about Goa", "best time to visit", "visa requirements", "what to pack"):
 → Use GENERAL_CHAT and answer knowledgeably. No price calculation needed.
 
-PACKAGE EXPLANATION (e.g. "explain my package", "what's included", "break it down"):
+PACKAGE EXPLANATION ("explain my package", "what's included", "break it down"):
 → Use EXPLAIN_PACKAGE with a warm, narrative description of everything included.
 
-UPGRADE SUGGESTION (e.g. "make it better", "luxury option", "best experience"):
+UPGRADE SUGGESTION ("make it better", "luxury option", "best experience"):
 → Use SUGGEST_UPGRADE or MULTI_ACTION to upgrade components.
 
 RESPONSE FORMAT — always return a single valid JSON object, no markdown fences:
@@ -7339,16 +7536,17 @@ Multiple changes: {{"action":"MULTI_ACTION","actions":[{{"action":"SET_X","value
 
 VALID ACTIONS: SET_DESTINATION, SET_HOTEL, SET_TRANSPORT, SET_CAB, SET_ADULTS, SET_CHILDREN,
 SET_NIGHTS, SET_ROOMS, SET_SEASON (ON/OFF), ADD_ADDON, REMOVE_ADDON,
-READY_TO_CALCULATE, EXPLAIN_PACKAGE, SUGGEST_UPGRADE, ASK_FIELD, GENERAL_CHAT, MULTI_ACTION
+READY_TO_CALCULATE, EXPLAIN_PACKAGE, SUGGEST_UPGRADE, ASK_FIELD, GENERAL_CHAT,
+MULTI_ACTION, GENERATE_PACKAGES, FETCH_LIVE_DATA
 
 CRITICAL RULES:
-- NEVER state, estimate or calculate any price yourself. Use READY_TO_CALCULATE to trigger the pricing engine.
+- NEVER state, estimate or calculate any price yourself. Use READY_TO_CALCULATE or GENERATE_PACKAGES.
 - You MAY reference prices already shown in the breakdown above.
-- When the user asks about budget, set a realistic package then call READY_TO_CALCULATE.
-- When modifying package state, ALWAYS call READY_TO_CALCULATE afterwards (include it in MULTI_ACTION actions list as last item, or respond with READY_TO_CALCULATE as action after state change).
+- When the user wants to see package OPTIONS → use GENERATE_PACKAGES (not MULTI_ACTION + READY_TO_CALCULATE).
+- When modifying a SINGLE package state → use SET_* or MULTI_ACTION then READY_TO_CALCULATE.
 - Use exact internal_name keys from AVAILABLE OPTIONS when setting values.
 - For EXPLAIN_PACKAGE — give a warm narrative of the full trip, not a bullet list.
-- For package suggestions — ask about interests/budget/group type if unclear, then use MULTI_ACTION to set everything."""
+- For GENERATE_PACKAGES — extract as much intent as possible from the message, use defaults for rest."""
 
     # Build conversation history for Anthropic format
     anthropic_msgs = []
@@ -7395,7 +7593,7 @@ CRITICAL RULES:
         'SET_HOTEL','SET_TRANSPORT','SET_DESTINATION','SET_ADULTS','SET_CHILDREN',
         'SET_NIGHTS','SET_ROOMS','SET_SEASON','ADD_ADDON','REMOVE_ADDON','SET_CAB',
         'READY_TO_CALCULATE','SUGGEST_UPGRADE','ASK_FIELD','GENERAL_CHAT',
-        'EXPLAIN_PACKAGE','MULTI_ACTION',
+        'EXPLAIN_PACKAGE','MULTI_ACTION','GENERATE_PACKAGES','FETCH_LIVE_DATA',
     }
     if result.get('action') not in VALID:
         result['action'] = 'GENERAL_CHAT'
@@ -7579,16 +7777,40 @@ AVAILABLE OPTIONS (always use exact keys when setting values):
 ━━━ ALL VALID ACTIONS ━━━
 SET_DESTINATION, SET_HOTEL, SET_TRANSPORT, SET_CAB, SET_ADULTS, SET_CHILDREN,
 SET_NIGHTS, SET_ROOMS, SET_SEASON (value: ON or OFF), ADD_ADDON, REMOVE_ADDON,
-READY_TO_CALCULATE, EXPLAIN_PACKAGE, SUGGEST_UPGRADE, ASK_FIELD, GENERAL_CHAT, MULTI_ACTION
+READY_TO_CALCULATE, EXPLAIN_PACKAGE, SUGGEST_UPGRADE, ASK_FIELD, GENERAL_CHAT,
+MULTI_ACTION, GENERATE_PACKAGES, FETCH_LIVE_DATA
 
 ━━━ CRITICAL PRICE RULE ━━━
 NEVER state, estimate, guess, or calculate any price yourself. The backend pricing engine does ALL pricing.
 You may REFERENCE prices already shown in the breakdown above (those came from the engine).
-To get a price: use READY_TO_CALCULATE.
+To get a price: READY_TO_CALCULATE (single package) or GENERATE_PACKAGES (5 options).
 
 ━━━ INTENT RECOGNITION ━━━
-BUDGET SEARCH ("budget under 50000", "cheap trip", "affordable", "what can I get in X rupees"):
-→ Use MULTI_ACTION to build a realistic package within budget, then add READY_TO_CALCULATE at end of actions.
+
+PACKAGE DISCOVERY / SUGGESTIONS — USE GENERATE_PACKAGES with LIVE DATA:
+Triggers: "plan a trip", "suggest packages", "show me options", "I want to go to X",
+"find me a package", "honeymoon package", "family trip to X", "budget trip", "show me choices",
+"what can I get for N nights", "I have N people going to X", "give me options".
+
+STEP 1: Identify destination from DESTINATIONS list.
+STEP 2: You MUST also collect flight details for live Amadeus search:
+  - origin: departure city IATA code (e.g. DEL, BOM, BLR, CCU, HYD, MAA, AMD, PNQ, COK) — ask if missing
+  - departureDate: YYYY-MM-DD — ask if missing
+  - returnDate: YYYY-MM-DD (optional, for round-trip)
+  Ask ONLY the missing fields. Once you have destination + origin + departureDate → immediately return GENERATE_PACKAGES.
+STEP 3: GENERATE_PACKAGES format MUST include all live search params:
+  {{"action":"GENERATE_PACKAGES","intent":{{"destination":"exact_key","nights":3,"adults":2,"children":0,"season":"ON","travel_type":"general","budget":null,"origin":"DEL","destination_iata":"GOI","cityCode":"GOA","departureDate":"2026-03-20","returnDate":"2026-03-25","trip_type":"return"}},"message":"🔍 Fetching live flights & hotels from Amadeus and building your packages..."}}
+
+IMPORTANT: destination_iata is the IATA airport code (GOI for Goa, BOM for Mumbai, DEL for Delhi, BLR for Bangalore, HYD for Hyderabad, MAA for Chennai, CCU for Kolkata, AMD for Ahmedabad, PNQ for Pune, COK for Kochi, IXC for Chandigarh, SXR for Srinagar, IXJ for Jammu, LUH for Ludhiana, ATQ for Amritsar, IXL for Leh, VNS for Varanasi, PAT for Patna, GAU for Guwahati, IXZ for Port Blair, TRV for Trivandrum, IXM for Madurai, IXE for Mangalore).
+cityCode is the Amadeus hotel city IATA (GOA for Goa, BOM for Mumbai, DEL for Delhi, BLR for Bangalore etc.) — usually same 3 letters as the major city.
+
+BUDGET SEARCH ("budget under 50000", "what can I get in X rupees", "cheap trip"):
+→ Use GENERATE_PACKAGES with travel_type="budget" and budget=<amount>. Ask for destination + origin + date.
+
+EXPLICIT LIVE SEARCH ("search live flights", "find flights", "real-time availability"):
+→ Use FETCH_LIVE_DATA if user explicitly wants to see raw flight/hotel list before package building.
+→ FETCH_LIVE_DATA format:
+  {{"action":"FETCH_LIVE_DATA","params":{{"origin":"DEL","destination":"GOI","departureDate":"2026-03-15","returnDate":"2026-03-20","adults":2,"children":0,"trip_type":"return","cityCode":"GOA"}},"message":"Searching live Amadeus inventory for you! ✈️🏨"}}
 
 MODIFY PACKAGE ("change hotel", "fewer nights", "add insurance", "upgrade", "remove X"):
 → Apply changes immediately with SET_* or MULTI_ACTION. Always follow with READY_TO_CALCULATE.
@@ -7602,7 +7824,7 @@ PACKAGE EXPLANATION ("explain my package", "what's included"):
 ━━━ OUTPUT FORMAT ━━━
 Always return a single valid JSON object. No markdown fences. No extra text outside the JSON.
 Your "message" field is shown directly to the user — make it warm, conversational, and helpful.
-Use line breaks (\n) in messages where natural. Bold important words with **word**.
+Use line breaks (\\n) in messages where natural. Bold important words with **word**.
 
 ━━━ PACKAGE EXPLANATION STYLE ━━━
 When explaining, don't list fields — narrate: "You're headed to stunning Goa for 5 nights...
@@ -7610,8 +7832,9 @@ Your stay at [hotel] promises [what makes it great]... Getting there by [transpo
 Include what's included, what makes this trip special, value highlights.
 
 ━━━ SUGGESTION STYLE ━━━
-Ask 2-3 targeted questions: What's the vibe — beach/adventure/culture? Budget range — comfortable/premium/luxury?
-Who's travelling — couple, family, friends? Then pick from available options and build a package with MULTI_ACTION."""
+For open-ended requests ("suggest something", "plan a surprise trip"):
+Ask 1-2 targeted questions max: Destination preference? Budget range?
+Then immediately use GENERATE_PACKAGES — don't keep asking questions."""
 
         # Web search tool
         tools = [{
@@ -7710,7 +7933,7 @@ Who's travelling — couple, family, friends? Then pick from available options a
             'SET_HOTEL','SET_TRANSPORT','SET_DESTINATION','SET_ADULTS','SET_CHILDREN',
             'SET_NIGHTS','SET_ROOMS','SET_SEASON','ADD_ADDON','REMOVE_ADDON','SET_CAB',
             'READY_TO_CALCULATE','SUGGEST_UPGRADE','ASK_FIELD','GENERAL_CHAT',
-            'EXPLAIN_PACKAGE','MULTI_ACTION',
+            'EXPLAIN_PACKAGE','MULTI_ACTION','GENERATE_PACKAGES','FETCH_LIVE_DATA',
         }
         action = result.get('action', 'GENERAL_CHAT')
         if action not in VALID:
@@ -7983,6 +8206,668 @@ def _process_ai_intent_fallback(message, state, last_calc, hotels, transports, d
     }
 
 
+@app.route('/api/ai-live-search', methods=['POST'])
+def ai_live_search():
+    """
+    AI-triggered live search: fetches live flights + hotels from Amadeus simultaneously.
+    Called when AI returns FETCH_LIVE_DATA action.
+
+    Request body:
+    {
+        "origin":        "DEL",          # IATA departure code (required for flights)
+        "destination":   "GOI",          # IATA arrival code (required for flights)
+        "cityCode":      "GOA",          # IATA city code for hotel search (optional, defaults to destination)
+        "departureDate": "2026-03-15",   # YYYY-MM-DD (required)
+        "returnDate":    "2026-03-20",   # YYYY-MM-DD (optional)
+        "adults":        2,
+        "children":      0,
+        "rooms":         1,
+        "trip_type":     "return"        # "one_way" | "return"
+    }
+
+    Returns:
+    {
+        "flights": [...],
+        "hotels": [...],
+        "flight_count": N,
+        "hotel_count": N,
+        "has_live_flights": bool,
+        "has_live_hotels": bool,
+        "errors": []
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        origin = (data.get('origin') or '').strip().upper()
+        destination = (data.get('destination') or '').strip().upper()
+        city_code_raw = (data.get('cityCode') or '').strip().upper()
+        departure_date = (data.get('departureDate') or data.get('departure_date') or '').strip()
+        return_date = (data.get('returnDate') or data.get('return_date') or '').strip()
+        raw_trip_type = data.get('trip_type') or data.get('tripType') or 'one_way'
+        trip_type = _validate_and_normalise_trip_type(raw_trip_type)
+
+        # Resolve IATA codes properly
+        airport_iata, city_iata = _resolve_destination_iata('', city_code_raw, destination)
+        if not destination and airport_iata:
+            destination = airport_iata
+        city_code = city_iata or city_code_raw or destination[:3] if destination else ''
+
+        logger.info(f"ai-live-search: origin={origin}, dest={destination}, city={city_code}, dep={departure_date}")
+
+        try:
+            adults = max(1, int(data.get('adults', 2)))
+        except (ValueError, TypeError):
+            adults = 2
+        try:
+            children = max(0, int(data.get('children', 0)))
+        except (ValueError, TypeError):
+            children = 0
+        try:
+            rooms = max(1, int(data.get('rooms', 1)))
+        except (ValueError, TypeError):
+            rooms = 1
+
+        errors = []
+        flights = []
+        hotels = []
+
+        # ── Live flight search ─────────────────────────────────────────────────
+        if origin and destination and departure_date:
+            try:
+                flight_params = {
+                    'originLocationCode': origin,
+                    'destinationLocationCode': destination,
+                    'departureDate': departure_date,
+                    'adults': adults,
+                    'max': 10,
+                    'currencyCode': 'INR',
+                }
+                if children > 0:
+                    flight_params['children'] = children
+                if trip_type == 'return' and return_date:
+                    flight_params['returnDate'] = return_date
+
+                resp = _amadeus_flight_search_request(flight_params)
+                if resp.ok:
+                    raw = resp.json()
+                    raw_offers = raw.get('data', [])
+                    flights = _normalize_flight_offers(raw_offers, trip_type)
+                    # Cache raw offers
+                    for raw_offer in raw_offers:
+                        raw_offer_id = str(raw_offer.get('id', ''))
+                        if raw_offer_id:
+                            _store_raw_flight_offer(raw_offer_id, raw_offer)
+                    logger.info(f"AI live flight search {origin}->{destination}: {len(flights)} offers")
+                else:
+                    err_body = {}
+                    try: err_body = resp.json()
+                    except Exception: pass
+                    errs = err_body.get('errors', [])
+                    msg = errs[0].get('title', 'Flight search failed') if errs else 'Flight search failed'
+                    errors.append(f"Flights: {msg}")
+                    logger.warning(f"AI live flight search failed: {resp.status_code} {msg}")
+            except Exception as fe:
+                errors.append(f"Flights: {str(fe)}")
+                logger.error(f"AI live flight search error: {fe}", exc_info=True)
+        else:
+            if not origin or not destination:
+                errors.append("Flights: origin/destination IATA codes required")
+            if not departure_date:
+                errors.append("Flights: departure date required")
+
+        # ── Live hotel search ──────────────────────────────────────────────────
+        if city_code and departure_date:
+            try:
+                from datetime import date as _date, timedelta as _timedelta
+                check_in = departure_date
+                if return_date:
+                    check_out = return_date
+                else:
+                    ci = _date.fromisoformat(departure_date)
+                    nights_count = max(1, int(data.get('nights', 3)))
+                    check_out = (ci + _timedelta(days=nights_count)).isoformat()
+
+                try:
+                    from datetime import date as _d2
+                    nights_count2 = max(1, (_d2.fromisoformat(check_out) - _d2.fromisoformat(check_in)).days)
+                except Exception:
+                    nights_count2 = max(1, int(data.get('nights', 3)))
+
+                hotel_ids = _fetch_hotel_ids_for_city(city_code, ratings=None)
+                if hotel_ids:
+                    # _fetch_hotel_offers returns a LIST of raw offer blocks (not a dict)
+                    raw_hotel_list = _fetch_hotel_offers(hotel_ids[:20], check_in, check_out, adults, rooms)
+                    normalized = _normalize_hotel_offers(raw_hotel_list, nights_count2)
+                    for nh in normalized:
+                        # Cache raw offer block for booking
+                        offer_id = nh['id']
+                        # Find and store the matching raw block
+                        for rh in raw_hotel_list:
+                            raw_offers_list = rh.get('offers', [])
+                            for ro in raw_offers_list:
+                                if str(ro.get('id', '')) == str(offer_id):
+                                    _store_raw_hotel_offer(offer_id, rh)
+                                    break
+                        hotels.append({
+                            'id': nh['id'],
+                            'hotelId': nh['hotelId'],
+                            'hotelName': nh['hotelName'],
+                            'cityCode': city_code,
+                            'roomType': nh['roomType'],
+                            'boardType': nh['boardType'],
+                            'cancellationPolicy': nh.get('cancellationPolicy', ''),
+                            'checkIn': check_in,
+                            'checkOut': check_out,
+                            'nights': nights_count2,
+                            'adults': adults,
+                            'rooms': rooms,
+                            'totalPrice': nh['totalPrice'],
+                            'pricePerNight': nh['perNightPrice'],
+                            'currency': 'INR',
+                            'originalPrice': nh['originalPrice'],
+                            'originalCurrency': nh['originalCurrency'],
+                        })
+                    logger.info(f"AI live hotel search {city_code}: {len(hotels)} hotels")
+                else:
+                    errors.append(f"Hotels: no hotel IDs found for city {city_code}")
+            except Exception as hote:
+                errors.append(f"Hotels: {str(hote)}")
+                logger.error(f"AI live hotel search error: {hote}", exc_info=True)
+
+        return jsonify({
+            'flights': flights,
+            'hotels': hotels,
+            'flight_count': len(flights),
+            'hotel_count': len(hotels),
+            'has_live_flights': len(flights) > 0,
+            'has_live_hotels': len(hotels) > 0,
+            'errors': errors,
+            'success': True,
+        })
+
+    except Exception as e:
+        logger.error(f'ai-live-search error: {e}', exc_info=True)
+        return jsonify({
+            'flights': [], 'hotels': [],
+            'flight_count': 0, 'hotel_count': 0,
+            'has_live_flights': False, 'has_live_hotels': False,
+            'errors': [str(e)], 'success': False,
+        }), 500
+
+
+@app.route('/api/generate-packages', methods=['POST'])
+def generate_packages():
+    """
+    Generate 5 tailored package options based on extracted user intent.
+    Each option is priced via pricing_engine — AI never calculates prices.
+    """
+    try:
+        data = request.get_json() or {}
+        client_id = int(data.get('client_id', 1))
+        intent = data.get('intent', {})
+        if not isinstance(intent, dict):
+            intent = {}
+
+        db = get_db()
+        cur = db.cursor()
+
+        # ── Helper: check if a column exists in a table ───────────────────────
+        def col_exists(table, col):
+            cur.execute("""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name=%s AND column_name=%s LIMIT 1
+            """, (table, col))
+            return cur.fetchone() is not None
+
+        has_deleted_dest   = col_exists('destinations', 'deleted')
+        has_deleted_hotels = col_exists('hotels', 'deleted')
+        has_deleted_trans  = col_exists('transports', 'deleted')
+        has_deleted_addons = col_exists('addons', 'deleted')
+        has_rate_hotels    = col_exists('hotels', 'adult_rate_peak')
+        has_rate_trans     = col_exists('transports', 'adult_rate_peak')
+
+        # ── Load all active destinations ──────────────────────────────────────
+        dest_del = "AND d.deleted = FALSE" if has_deleted_dest else ""
+        cur.execute(f"""
+            SELECT d.internal_name, d.display_name, d.region_id, r.name AS region_name
+            FROM destinations d
+            JOIN regions r ON r.id = d.region_id
+            WHERE d.client_id = %s AND d.active = TRUE {dest_del}
+            ORDER BY d.display_name
+        """, (client_id,))
+        all_destinations = [
+            {'internal_name': r[0], 'display_name': r[1], 'region_id': r[2], 'region_name': r[3]}
+            for r in cur.fetchall()
+        ]
+
+        # ── Load all active hotels ────────────────────────────────────────────
+        hotel_del = "AND deleted = FALSE" if has_deleted_hotels else ""
+        if has_rate_hotels:
+            cur.execute(f"""
+                SELECT internal_name, name, adult_rate_peak, adult_rate_off
+                FROM hotels WHERE client_id=%s AND active=TRUE {hotel_del}
+                ORDER BY adult_rate_peak ASC NULLS LAST
+            """, (client_id,))
+            all_hotels = [
+                {'internal_name': r[0], 'name': r[1], 'adult_rate_peak': r[2], 'adult_rate_off': r[3]}
+                for r in cur.fetchall()
+            ]
+        else:
+            cur.execute(f"""
+                SELECT internal_name, name
+                FROM hotels WHERE client_id=%s AND active=TRUE {hotel_del}
+                ORDER BY name
+            """, (client_id,))
+            all_hotels = [
+                {'internal_name': r[0], 'name': r[1], 'adult_rate_peak': 0, 'adult_rate_off': 0}
+                for r in cur.fetchall()
+            ]
+
+        # ── Load all active transports ────────────────────────────────────────
+        trans_del = "AND deleted = FALSE" if has_deleted_trans else ""
+        if has_rate_trans:
+            cur.execute(f"""
+                SELECT transport_type, display_name, adult_rate_peak, adult_rate_off
+                FROM transports WHERE client_id=%s AND active=TRUE {trans_del}
+                ORDER BY adult_rate_peak ASC NULLS LAST
+            """, (client_id,))
+            all_transports = [
+                {'transport_type': r[0], 'display_name': r[1], 'adult_rate_peak': r[2], 'adult_rate_off': r[3]}
+                for r in cur.fetchall()
+            ]
+        else:
+            cur.execute(f"""
+                SELECT transport_type, display_name
+                FROM transports WHERE client_id=%s AND active=TRUE {trans_del}
+                ORDER BY display_name
+            """, (client_id,))
+            all_transports = [
+                {'transport_type': r[0], 'display_name': r[1], 'adult_rate_peak': 0, 'adult_rate_off': 0}
+                for r in cur.fetchall()
+            ]
+
+        # ── Load all active add-ons ───────────────────────────────────────────
+        addon_del = "AND deleted = FALSE" if has_deleted_addons else ""
+        cur.execute(f"""
+            SELECT internal_name, name
+            FROM addons WHERE client_id=%s AND active=TRUE {addon_del}
+        """, (client_id,))
+        all_addons = [{'internal_name': r[0], 'name': r[1]} for r in cur.fetchall()]
+
+        # ── Resolve destination ───────────────────────────────────────────────
+        dest_key = str(intent.get('destination', '')).strip()
+        selected_dest = None
+        if dest_key:
+            for d in all_destinations:
+                if d['internal_name'] == dest_key or d['display_name'].lower() == dest_key.lower():
+                    selected_dest = d
+                    break
+        if not selected_dest and all_destinations:
+            selected_dest = all_destinations[0]
+
+        if not selected_dest:
+            db.close()
+            return jsonify({'error': 'No destinations configured', 'package_options': [], 'success': False}), 400
+
+        region_id = selected_dest['region_id']
+
+        # ── Filter hotels/transports to this region if region_id matches ──────
+        # (hotels/transports may be region-scoped or client-wide depending on schema)
+        cur.execute("SELECT 1 FROM hotels WHERE region_id=%s AND client_id=%s AND active=TRUE LIMIT 1",
+                    (region_id, client_id))
+        region_hotels_exist = cur.fetchone() is not None
+
+        if region_hotels_exist:
+            if has_rate_hotels:
+                cur.execute(f"""
+                    SELECT internal_name, name, adult_rate_peak, adult_rate_off
+                    FROM hotels WHERE region_id=%s AND client_id=%s AND active=TRUE {hotel_del}
+                    ORDER BY adult_rate_peak ASC NULLS LAST
+                """, (region_id, client_id))
+                all_hotels = [
+                    {'internal_name': r[0], 'name': r[1], 'adult_rate_peak': r[2], 'adult_rate_off': r[3]}
+                    for r in cur.fetchall()
+                ]
+            else:
+                cur.execute(f"""
+                    SELECT internal_name, name FROM hotels
+                    WHERE region_id=%s AND client_id=%s AND active=TRUE {hotel_del}
+                    ORDER BY name
+                """, (region_id, client_id))
+                all_hotels = [
+                    {'internal_name': r[0], 'name': r[1], 'adult_rate_peak': 0, 'adult_rate_off': 0}
+                    for r in cur.fetchall()
+                ]
+
+        cur.execute("SELECT 1 FROM transports WHERE region_id=%s AND client_id=%s AND active=TRUE LIMIT 1",
+                    (region_id, client_id))
+        region_trans_exist = cur.fetchone() is not None
+
+        if region_trans_exist:
+            if has_rate_trans:
+                cur.execute(f"""
+                    SELECT transport_type, display_name, adult_rate_peak, adult_rate_off
+                    FROM transports WHERE region_id=%s AND client_id=%s AND active=TRUE {trans_del}
+                    ORDER BY adult_rate_peak ASC NULLS LAST
+                """, (region_id, client_id))
+                all_transports = [
+                    {'transport_type': r[0], 'display_name': r[1], 'adult_rate_peak': r[2], 'adult_rate_off': r[3]}
+                    for r in cur.fetchall()
+                ]
+            else:
+                cur.execute(f"""
+                    SELECT transport_type, display_name FROM transports
+                    WHERE region_id=%s AND client_id=%s AND active=TRUE {trans_del}
+                    ORDER BY display_name
+                """, (region_id, client_id))
+                all_transports = [
+                    {'transport_type': r[0], 'display_name': r[1], 'adult_rate_peak': 0, 'adult_rate_off': 0}
+                    for r in cur.fetchall()
+                ]
+
+        # ── Intent parameters with defaults ──────────────────────────────────
+        nights     = max(1, int(intent.get('nights') or 3))
+        adults     = max(1, int(intent.get('adults') or 2))
+        children   = max(0, int(intent.get('children') or 0))
+        rooms      = max(1, int(intent.get('rooms') or 1))
+        season     = 'ON' if str(intent.get('season', 'ON')).upper() == 'ON' else 'OFF'
+        budget     = intent.get('budget')
+        travel_type = str(intent.get('travel_type') or '').lower()
+        flight_included = bool(intent.get('flight_included') or intent.get('origin') or intent.get('departureDate'))
+
+        if not all_hotels or not all_transports:
+            db.close()
+            return jsonify({
+                'error': 'No hotels or transports configured for this destination. Please set them up in the admin panel.',
+                'package_options': [], 'success': False
+            }), 400
+
+        # ── Attempt live Amadeus flights and hotels ───────────────────────────
+        live_flights = []
+        live_hotels  = []
+        live_search_attempted = False
+
+        if flight_included:
+            origin         = str(intent.get('origin') or '').strip().upper()
+            dest_iata_hint = str(intent.get('destination_iata') or '').strip().upper()
+            city_code_hint = str(intent.get('cityCode') or '').strip().upper()
+            departure_date = str(intent.get('departureDate') or intent.get('departure_date') or '').strip()
+            return_date    = str(intent.get('returnDate') or intent.get('return_date') or '').strip()
+            raw_trip_type  = str(intent.get('trip_type') or 'one_way')
+            trip_type      = _validate_and_normalise_trip_type(raw_trip_type)
+
+            # Resolve IATA codes — prefer AI-provided hints, fallback to lookup table
+            dest_key_for_lookup = str(intent.get('destination') or '').strip()
+            airport_iata, city_iata = _resolve_destination_iata(
+                dest_key_for_lookup, city_code_hint, dest_iata_hint
+            )
+            destination_iata = airport_iata or dest_iata_hint or city_code_hint
+            city_code        = city_iata or city_code_hint or destination_iata
+
+            logger.info(
+                f"generate-packages live search: origin={origin}, dest_iata={destination_iata}, "
+                f"city_code={city_code}, dep={departure_date}, ret={return_date}"
+            )
+
+            if origin and (destination_iata or city_code) and departure_date:
+                live_search_attempted = True
+                try:
+                    flight_params = {
+                        'originLocationCode': origin,
+                        'destinationLocationCode': destination_iata or city_code,
+                        'departureDate': departure_date,
+                        'adults': adults,
+                        'max': 5,
+                        'currencyCode': 'INR',
+                    }
+                    if children > 0:
+                        flight_params['children'] = children
+                    if trip_type == 'return' and return_date:
+                        flight_params['returnDate'] = return_date
+                    resp = _amadeus_flight_search_request(flight_params)
+                    if resp.ok:
+                        raw_flt = resp.json().get('data', [])
+                        live_flights = _normalize_flight_offers(raw_flt, trip_type)
+                        for rof in raw_flt:
+                            roid = str(rof.get('id', ''))
+                            if roid:
+                                _store_raw_flight_offer(roid, rof)
+                        logger.info(f"generate-packages: live flights {origin}->{destination_iata}: {len(live_flights)}")
+                except Exception as lfe:
+                    logger.warning(f"generate-packages: live flight fetch failed: {lfe}")
+
+                # Live hotel search
+                if city_code:
+                    try:
+                        from datetime import date as _gp_date, timedelta as _gp_td
+                        check_in  = departure_date
+                        check_out = return_date if return_date else (
+                            (_gp_date.fromisoformat(departure_date) + _gp_td(days=nights)).isoformat()
+                        )
+                        try:
+                            gp_nights = max(1, (_gp_date.fromisoformat(check_out) - _gp_date.fromisoformat(check_in)).days)
+                        except Exception:
+                            gp_nights = nights
+
+                        hotel_ids = _fetch_hotel_ids_for_city(city_code, ratings=None)
+                        if hotel_ids:
+                            # _fetch_hotel_offers returns a LIST of raw offer blocks
+                            raw_hotel_list = _fetch_hotel_offers(hotel_ids[:15], check_in, check_out, adults, rooms)
+                            normalized_hotels = _normalize_hotel_offers(raw_hotel_list, gp_nights)
+                            for nh in normalized_hotels:
+                                offer_id = nh['id']
+                                # Store raw block for booking
+                                for rh in raw_hotel_list:
+                                    for ro in rh.get('offers', []):
+                                        if str(ro.get('id', '')) == str(offer_id):
+                                            _store_raw_hotel_offer(offer_id, rh)
+                                            break
+                                live_hotels.append({
+                                    'id': offer_id,
+                                    'hotelId': nh['hotelId'],
+                                    'hotelName': nh['hotelName'],
+                                    'cityCode': city_code,
+                                    'roomType': nh['roomType'],
+                                    'boardType': nh['boardType'],
+                                    'checkIn': check_in, 'checkOut': check_out,
+                                    'nights': gp_nights, 'adults': adults, 'rooms': rooms,
+                                    'totalPrice': nh['totalPrice'],
+                                    'pricePerNight': nh['perNightPrice'],
+                                    'currency': 'INR',
+                                    'originalPrice': nh['originalPrice'],
+                                    'originalCurrency': nh['originalCurrency'],
+                                })
+                            logger.info(f"generate-packages: live hotels {city_code}: {len(live_hotels)}")
+                        else:
+                            logger.warning(f"generate-packages: no hotel IDs for city {city_code}")
+                    except Exception as lhfe:
+                        logger.warning(f"generate-packages: live hotel fetch failed: {lhfe}")
+
+        season_rate_key = 'adult_rate_peak' if season == 'ON' else 'adult_rate_off'
+        sorted_hotels     = sorted(all_hotels,     key=lambda h: float(h.get(season_rate_key) or 0))
+        sorted_transports = sorted(all_transports, key=lambda t: float(t.get(season_rate_key) or 0))
+
+        n_h = len(sorted_hotels)
+        n_t = len(sorted_transports)
+
+        def _addons_for_tier(tier):
+            insurance = [a['internal_name'] for a in all_addons if any(k in a['name'].lower() for k in ['insurance','cover'])]
+            meals     = [a['internal_name'] for a in all_addons if any(k in a['name'].lower() for k in ['meal','breakfast','lunch','dinner','food','board'])]
+            activity  = [a['internal_name'] for a in all_addons if any(k in a['name'].lower() for k in ['activity','tour','sightseeing','excursion','trek','adventure','safari'])]
+            spa       = [a['internal_name'] for a in all_addons if any(k in a['name'].lower() for k in ['spa','wellness','massage'])]
+            transfer  = [a['internal_name'] for a in all_addons if any(k in a['name'].lower() for k in ['transfer','airport','pickup','drop'])]
+
+            if tier == 'budget':   picks = insurance[:1]
+            elif tier == 'comfort':  picks = insurance[:1] + transfer[:1]
+            elif tier == 'premium':  picks = insurance[:1] + meals[:1] + activity[:1]
+            elif tier == 'luxury':   picks = insurance[:1] + meals[:1] + activity[:1] + spa[:1]
+            else:                    picks = insurance[:1] + meals[:1] + activity[:2] + spa[:1] + transfer[:1]
+
+            if 'honeymoon' in travel_type: picks = list(dict.fromkeys(picks + spa[:1]))
+            if 'family'    in travel_type and tier != 'budget': picks = list(dict.fromkeys(picks + activity[:1]))
+            return [p for p in picks if p]
+
+        tiers = [
+            {'tier': 'budget',  'h_idx': 0,               't_idx': 0,               'label': '🎒 Budget Explorer'},
+            {'tier': 'comfort', 'h_idx': max(0,n_h//4),   't_idx': max(0,n_t//4),   'label': '🌟 Comfort Stay'},
+            {'tier': 'premium', 'h_idx': max(0,n_h//2),   't_idx': max(0,n_t//2),   'label': '✨ Premium Experience'},
+            {'tier': 'luxury',  'h_idx': max(0,3*n_h//4), 't_idx': max(0,3*n_t//4), 'label': '💎 Luxury Retreat'},
+            {'tier': 'ultra',   'h_idx': n_h-1,           't_idx': n_t-1,           'label': '👑 Ultra Exclusive'},
+        ]
+
+        if 'honeymoon' in travel_type:
+            tiers[0]['label']='🌹 Honeymoon Starter'; tiers[2]['label']='💕 Romantic Getaway'; tiers[4]['label']='💍 Dream Honeymoon'
+        elif 'family' in travel_type:
+            tiers[0]['label']='👨‍👩‍👧 Family Basic'; tiers[2]['label']='🎉 Family Fun'; tiers[4]['label']='🏖 Family Grand'
+        elif 'adventure' in travel_type:
+            tiers[0]['label']="🏕 Budget Adventure"; tiers[2]['label']="⛰ Explorer's Choice"; tiers[4]['label']='🚀 Ultimate Adventure'
+
+        engine = TravelPricingEngine(db, client_id)
+        package_options = []
+
+        # Prepare live flight tiers (cheapest → most expensive)
+        live_flights_sorted = sorted(live_flights, key=lambda f: f.get('price', 0)) if live_flights else []
+        live_hotels_sorted  = sorted(live_hotels,  key=lambda h: h.get('totalPrice', 0)) if live_hotels else []
+        n_lf = len(live_flights_sorted)
+        n_lh = len(live_hotels_sorted)
+
+        for t in tiers:
+            hotel  = sorted_hotels[    min(t['h_idx'], n_h-1)]
+            transp = sorted_transports[min(t['t_idx'], n_t-1)]
+            addon_keys = _addons_for_tier(t['tier'])
+
+            # ── Assign live flight to this tier ───────────────────────────────
+            pkg_live_flight = None
+            if live_flights_sorted:
+                # Map tier index to flight: budget→cheapest, ultra→most expensive
+                tier_order = ['budget', 'comfort', 'premium', 'luxury', 'ultra']
+                tier_idx   = tier_order.index(t['tier']) if t['tier'] in tier_order else 2
+                flt_idx    = min(round(tier_idx * (n_lf - 1) / max(len(tier_order) - 1, 1)), n_lf - 1)
+                pkg_live_flight = live_flights_sorted[flt_idx]
+
+            # ── Assign live hotel to this tier ────────────────────────────────
+            pkg_live_hotel = None
+            if live_hotels_sorted:
+                tier_order = ['budget', 'comfort', 'premium', 'luxury', 'ultra']
+                tier_idx   = tier_order.index(t['tier']) if t['tier'] in tier_order else 2
+                h_idx2     = min(round(tier_idx * (n_lh - 1) / max(len(tier_order) - 1, 1)), n_lh - 1)
+                pkg_live_hotel = live_hotels_sorted[h_idx2]
+
+            # ── Build pricing payload ─────────────────────────────────────────
+            calc_payload = {
+                'client_id': client_id, 'region_id': region_id,
+                'hotel': hotel['internal_name'] if not pkg_live_hotel else '',
+                'transport': transp['transport_type'],
+                'adults': adults, 'children': children, 'nights': nights,
+                'rooms': rooms, 'season': season, 'addons': addon_keys,
+                'cab': None, 'flight': None,
+                'hotel_source': 'live' if pkg_live_hotel else 'admin',
+                'live_hotel': None,
+                'days': [],
+            }
+            if pkg_live_hotel:
+                calc_payload['hotel'] = hotel['internal_name']  # for transport-based pricing
+                calc_payload['live_hotel'] = {
+                    'live_hotel_id': pkg_live_hotel.get('id', ''),
+                    'live_hotel_name': pkg_live_hotel.get('hotelName', ''),
+                    'live_hotel_room_type': pkg_live_hotel.get('roomType', ''),
+                    'live_hotel_board_type': pkg_live_hotel.get('boardType', ''),
+                    'live_hotel_total_price': pkg_live_hotel.get('totalPrice', 0),
+                    'live_hotel_currency': 'INR',
+                    'live_hotel_original_price': pkg_live_hotel.get('originalPrice', 0),
+                    'live_hotel_original_currency': pkg_live_hotel.get('originalCurrency', 'INR'),
+                }
+            if pkg_live_flight:
+                calc_payload['flight'] = {
+                    'type': pkg_live_flight.get('returnDeparture') and 'return' or 'one_way',
+                    'base_fare': pkg_live_flight.get('price', 0),
+                    'pax': adults + children,
+                }
+
+            try:
+                result     = engine.calculate_package_price(calc_payload)
+                total      = int(result.get('total', 0))
+                per_person = int(result.get('perPerson', 0))
+            except Exception as eng_err:
+                logger.warning(f"Pricing engine error for tier {t['tier']}: {eng_err}")
+                total = 0; per_person = 0
+
+            if budget and total > int(budget) * 1.2 and len(package_options) > 0:
+                continue
+
+            addon_names = []
+            for ak in addon_keys:
+                for a in all_addons:
+                    if a['internal_name'] == ak: addon_names.append(a['name']); break
+
+            if 'honeymoon' in travel_type:       base_desc = "A romantic escape designed for two"
+            elif 'family'    in travel_type:     base_desc = "A memorable family holiday"
+            elif 'adventure' in travel_type:     base_desc = "An action-packed adventure trip"
+            elif t['tier'] == 'budget':          base_desc = "Smart travel without compromising on experience"
+            elif t['tier'] == 'ultra':           base_desc = "The absolute best — no compromises"
+            else:                                base_desc = "A well-rounded, satisfying trip"
+
+            hotel_display = pkg_live_hotel['hotelName'] if pkg_live_hotel else hotel['name']
+            desc = (
+                f"{base_desc}. {nights} nights at {hotel_display} "
+                f"with {transp['display_name']} transport"
+                + (f". Includes: {', '.join(addon_names)}" if addon_names else '')
+                + (f". ✈️ Flight: {pkg_live_flight['airline']} {pkg_live_flight['origin']}→{pkg_live_flight['destination']}" if pkg_live_flight else '')
+                + '.'
+            )
+
+            highlights = [
+                f"🏨 {hotel_display}", f"🚗 {transp['display_name']}",
+                f"🌙 {nights} Nights", f"👥 {adults+children} Travellers",
+            ]
+            if pkg_live_flight:
+                highlights.insert(0, f"✈️ {pkg_live_flight['airline']} {pkg_live_flight['origin']}→{pkg_live_flight['destination']}")
+            if pkg_live_hotel:
+                highlights.append(f"🌐 Live Hotel (Amadeus)")
+            if addon_names: highlights.append(f"✅ {', '.join(addon_names[:2])}")
+            if 'honeymoon' in travel_type: highlights.append("💕 Romantic Setup")
+            elif 'family'   in travel_type: highlights.append("👨‍👩‍👧 Family Friendly")
+
+            package_options.append({
+                'title': t['label'], 'description': desc, 'tier': t['tier'],
+                'hotel': hotel['internal_name'], 'hotel_name': hotel_display,
+                'transport': transp['transport_type'], 'transport_name': transp['display_name'],
+                'nights': nights, 'adults': adults, 'children': children,
+                'rooms': rooms, 'season': season,
+                'season_label': 'Peak Season' if season == 'ON' else 'Off Season',
+                'add_ons': addon_keys, 'add_on_names': addon_names,
+                'calculated_total': total, 'per_person': per_person,
+                'highlights': highlights,
+                'destination': selected_dest['display_name'],
+                'destination_key': selected_dest['internal_name'],
+                'region_id': region_id,
+                # Live data (None if not available)
+                'live_flight': pkg_live_flight,
+                'live_hotel': pkg_live_hotel,
+                'has_live_data': bool(pkg_live_flight or pkg_live_hotel),
+            })
+
+        db.close()
+
+        # Ensure minimum 5 options by duplicating with variation
+        while len(package_options) < 5 and package_options:
+            dup = dict(package_options[-1])
+            dup['title'] = f"🌈 Custom Option {len(package_options)+1}"
+            package_options.append(dup)
+
+        return jsonify({
+            'package_options': package_options,
+            'success': True,
+            'live_search_attempted': live_search_attempted,
+            'live_flights_found': len(live_flights),
+            'live_hotels_found': len(live_hotels),
+        })
+
+    except Exception as e:
+        logger.error(f'generate-packages error: {e}', exc_info=True)
+        return jsonify({'error': str(e), 'package_options': [], 'success': False}), 500
+
+
 @app.route('/api/ai-status', methods=['GET'])
 def ai_status():
     """Returns which AI provider is active. Used by frontend to show status badge."""
@@ -8001,6 +8886,7 @@ def ai_status():
         label    = 'Rule-based'
         status   = 'limited'
     return jsonify({'provider': provider, 'label': label, 'status': status})
+
 
 
 # =====================================================

@@ -137,6 +137,110 @@ header::after{
 @keyframes tp{0%,60%,100%{transform:translateY(0);opacity:0.7}30%{transform:translateY(-10px);opacity:1}}
 
 /* =====================================================
+   PACKAGE CARDS — Glassmorphism
+   ===================================================== */
+#packageCardsContainer{
+  display:none;flex-direction:column;gap:0;margin:0.75rem 0;width:100%;
+}
+#packageCardsContainer.visible{display:flex;}
+.pkg-cards-title{
+  font-size:0.8rem;font-weight:600;color:rgba(255,255,255,0.5);letter-spacing:0.08em;
+  text-transform:uppercase;margin-bottom:0.6rem;padding:0 0.1rem;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.pkg-cards-title .pkg-dismiss-btn{
+  font-size:0.72rem;font-weight:500;color:rgba(255,255,255,0.35);background:none;
+  border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:0.15rem 0.6rem;
+  cursor:pointer;transition:all 0.2s;font-family:inherit;
+}
+.pkg-cards-title .pkg-dismiss-btn:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.3);}
+.pkg-cards-scroll{
+  display:flex;flex-direction:row;gap:0.75rem;
+  overflow-x:auto;overflow-y:hidden;
+  padding:0.25rem 0.1rem 0.75rem;
+  scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;scrollbar-color:rgba(102,126,234,0.4) transparent;
+}
+.pkg-cards-scroll::-webkit-scrollbar{height:4px;}
+.pkg-cards-scroll::-webkit-scrollbar-track{background:transparent;}
+.pkg-cards-scroll::-webkit-scrollbar-thumb{background:rgba(102,126,234,0.4);border-radius:4px;}
+.pkg-card{
+  background:linear-gradient(135deg,rgba(102,126,234,0.1),rgba(118,75,162,0.1));
+  backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid rgba(102,126,234,0.25);border-radius:16px;
+  padding:1rem 1.1rem;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);
+  box-shadow:0 4px 20px rgba(0,0,0,0.2);position:relative;overflow:hidden;
+  min-width:240px;max-width:260px;flex-shrink:0;
+  scroll-snap-align:start;display:flex;flex-direction:column;
+}
+.pkg-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,#667eea,#764ba2,#a78bfa);opacity:0;
+  transition:opacity 0.3s;
+}
+.pkg-card:hover{
+  border-color:rgba(102,126,234,0.6);
+  box-shadow:0 8px 32px rgba(102,126,234,0.3),0 0 0 1px rgba(102,126,234,0.2);
+  transform:translateY(-2px);
+}
+.pkg-card:hover::before{opacity:1;}
+.pkg-card.selected{
+  border-color:rgba(167,139,250,0.8);
+  background:linear-gradient(135deg,rgba(102,126,234,0.2),rgba(118,75,162,0.2));
+  box-shadow:0 0 0 2px rgba(167,139,250,0.5),0 8px 32px rgba(102,126,234,0.4);
+}
+.pkg-card.selected::before{opacity:1;}
+.pkg-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.5rem;}
+.pkg-card-title{font-size:0.92rem;font-weight:700;color:#fff;line-height:1.3;}
+.pkg-card-price{
+  text-align:right;flex-shrink:0;
+}
+.pkg-card-price .total{
+  font-size:1rem;font-weight:800;
+  background:linear-gradient(135deg,#a78bfa,#c4b5fd);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  white-space:nowrap;
+}
+.pkg-card-price .per-person{font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:1px;}
+.pkg-card-desc{font-size:0.75rem;color:rgba(255,255,255,0.55);line-height:1.4;margin-bottom:0.6rem;}
+.pkg-card-highlights{display:flex;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.65rem;}
+.pkg-highlight{
+  font-size:0.68rem;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
+  border-radius:20px;padding:0.18rem 0.55rem;color:rgba(255,255,255,0.7);white-space:nowrap;
+}
+.pkg-card-footer{display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-top:auto;padding-top:0.6rem;}
+.pkg-tier-badge{
+  font-size:0.62rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
+  padding:0.15rem 0.5rem;border-radius:20px;
+}
+.pkg-tier-budget{background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);}
+.pkg-tier-comfort{background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);}
+.pkg-tier-premium{background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);}
+.pkg-tier-luxury{background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);}
+.pkg-tier-ultra{background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);}
+.pkg-select-btn{
+  font-size:0.72rem;font-weight:600;padding:0.35rem 0.9rem;border:none;border-radius:20px;
+  background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;cursor:pointer;
+  transition:all 0.25s;white-space:nowrap;font-family:inherit;
+  box-shadow:0 2px 10px rgba(102,126,234,0.3);
+}
+.pkg-select-btn:hover{transform:scale(1.05);box-shadow:0 4px 16px rgba(102,126,234,0.5);}
+.pkg-card.selected .pkg-select-btn{background:linear-gradient(135deg,#34d399,#059669);box-shadow:0 2px 10px rgba(52,211,153,0.3);}
+.pkg-loading{
+  text-align:center;padding:1.5rem;color:rgba(255,255,255,0.5);font-size:0.85rem;
+}
+.pkg-loading .spinner{
+  display:inline-block;width:24px;height:24px;border:2px solid rgba(102,126,234,0.3);
+  border-top-color:#667eea;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:0.5rem;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pkg-error{
+  text-align:center;padding:1rem;color:#f87171;font-size:0.82rem;
+  background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:12px;
+}
+
+
+/* =====================================================
    OPTIONS
    ===================================================== */
 #optionsContainer{
@@ -927,6 +1031,67 @@ header::after{
   /* Hidden on mobile — language moved to #mobileBottomBar */
   #langSelectorBar{display:none !important;}
 }
+
+/* ── Package Options Cards ──────────────────────────────────────── */
+.pkg-cards-wrapper{display:flex;flex-direction:column;gap:12px;margin:8px 0;width:100%;}
+.pkg-card{
+  background:linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:16px;padding:16px;cursor:pointer;
+  transition:all 0.25s ease;position:relative;overflow:hidden;
+}
+.pkg-card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(102,126,234,0.05),rgba(118,75,162,0.05));
+  opacity:0;transition:opacity 0.25s;
+}
+.pkg-card:hover{border-color:rgba(102,126,234,0.5);transform:translateY(-2px);box-shadow:0 8px 32px rgba(102,126,234,0.2);}
+.pkg-card:hover::before{opacity:1;}
+.pkg-card.selected{
+  border-color:rgba(102,126,234,0.9);
+  background:linear-gradient(135deg,rgba(102,126,234,0.2),rgba(118,75,162,0.15));
+  box-shadow:0 0 24px rgba(102,126,234,0.4),0 8px 32px rgba(102,126,234,0.2);
+}
+.pkg-card.selected::before{opacity:1;}
+.pkg-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.pkg-card-title{font-size:15px;font-weight:700;color:#fff;line-height:1.3;}
+.pkg-card-price{
+  font-size:16px;font-weight:800;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  white-space:nowrap;margin-left:8px;
+}
+.pkg-card-comfort{
+  display:inline-block;font-size:10px;font-weight:600;
+  padding:2px 8px;border-radius:20px;margin-bottom:6px;
+  background:rgba(102,126,234,0.2);color:rgba(102,126,234,1);
+  border:1px solid rgba(102,126,234,0.3);
+}
+.pkg-card-desc{font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:10px;line-height:1.5;}
+.pkg-card-details{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.pkg-detail-chip{
+  font-size:11px;color:rgba(255,255,255,0.8);
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
+  padding:3px 8px;border-radius:20px;
+}
+.pkg-addons{font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:10px;}
+.pkg-per-person{font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:10px;}
+.pkg-select-btn{
+  width:100%;padding:10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;
+  background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;
+  transition:all 0.2s;
+}
+.pkg-select-btn:hover{opacity:0.9;transform:translateY(-1px);}
+.pkg-card.selected .pkg-select-btn{background:linear-gradient(135deg,#22c55e,#16a34a);}
+.pkg-stars{color:#f59e0b;font-size:12px;margin-right:4px;}
+.pkg-loading{text-align:center;padding:20px;color:rgba(255,255,255,0.5);font-size:13px;}
+.pkg-error{text-align:center;padding:16px;color:rgba(248,113,113,0.9);font-size:13px;background:rgba(248,113,113,0.1);border-radius:12px;border:1px solid rgba(248,113,113,0.2);}
+@media(max-width:480px){
+  .pkg-card{padding:12px;}
+  .pkg-card-title{font-size:13px;}
+  .pkg-card-price{font-size:14px;}
+}
 </style>
 </head>
 <body>
@@ -1195,10 +1360,18 @@ header::after{
 <div id="mainContainer">
     <div id="chatbotContainer">
         <div id="messages"></div>
+        <!-- Package Cards — shown when AI generates options -->
+        <div id="packageCardsContainer">
+            <div class="pkg-cards-title">
+                <span>✨ Tailored Package Options</span>
+                <button class="pkg-dismiss-btn" onclick="_hidePackageCards()">✕ Dismiss</button>
+            </div>
+            <div id="pkgCardsScroll" class="pkg-cards-scroll"></div>
+        </div>
         <div id="optionsContainer"></div>
         <div id="aiQuickBar">
             <button class="qchip" data-lang-key="chip_explain" onclick="sendAIMessage('Explain my current package in detail')">📋 Explain Package</button>
-            <button class="qchip" data-lang-key="chip_suggest" onclick="sendAIMessage('Suggest me a perfect package based on my preferences')">✨ Suggest Package</button>
+            <button class="qchip" data-lang-key="chip_suggest" onclick="sendAIMessage('Show me 5 package options for my trip')">✨ Find Packages</button>
             <button class="qchip" data-lang-key="chip_best_time" onclick="sendAIMessage('What is the best time to visit my destination?')">🌤 Best Time</button>
             <button class="qchip" data-lang-key="chip_attractions" onclick="sendAIMessage('What are the must-see attractions there?')">📍 Top Attractions</button>
             <button class="qchip" data-lang-key="chip_upgrade" onclick="sendAIMessage('How can I upgrade or improve this trip?')">⬆ Upgrade Ideas</button>
@@ -1729,6 +1902,17 @@ function addBot(msg){
         speakText(msg);
     }
 }
+function addBotRaw(html){
+    // Injects raw HTML directly into the messages area (for interactive widgets)
+    if(window._silentRender) return;
+    const d=document.createElement('div');
+    d.className='botMessage';
+    d.innerHTML=html;
+    d.style.opacity='0';
+    messages.appendChild(d);
+    requestAnimationFrame(()=>{requestAnimationFrame(()=>{d.style.opacity='1';});});
+    scrollToBottom();
+}
 function addUser(msg){const d=document.createElement('div');d.className='userMessage';d.textContent=msg;d.style.opacity='0';messages.appendChild(d);requestAnimationFrame(()=>{requestAnimationFrame(()=>{d.style.opacity='1';});});scrollToBottom();}
 function addTypingIndicator(){const t=document.createElement('div');t.className='botMessage typing-indicator';t.innerHTML='<span></span><span></span><span></span>';t.id='typingIndicator';messages.appendChild(t);scrollToBottom();}
 function removeTypingIndicator(){const t=document.getElementById('typingIndicator');if(t)t.remove();}
@@ -1744,7 +1928,7 @@ function updateNavButtons(){
         backBtn.style.display = stepHistory.length > 0 ? '' : 'none';
     }
 }
-function goBack(){if(!stepHistory.length)return;currentStep=stepHistory.pop();optionsContainer.innerHTML="";updateNavButtons();updateSummary();renderStep();}
+function goBack(){if(!stepHistory.length)return;currentStep=stepHistory.pop();optionsContainer.innerHTML="";updateNavButtons();updateSummary();renderStep();_hidePackageCards();}
 
 function goHome(){
     // Full state reset without page reload
@@ -1764,6 +1948,7 @@ function goHome(){
     updateNavButtons();
     updateSummary();
     renderStep();
+    _hidePackageCards();
 }
 
 async function checkIfCabRequired(){try{const r=await fetch(`${API_BASE}/check-cab-required`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({transport:selectedTransport,days:sightseeingSelectionsState})});const d=await r.json();window.cabRequired=d.cabRequired;}catch(e){window.cabRequired=true;}}
@@ -3130,7 +3315,30 @@ function updateSummary(){
     if(selectedTransport){html+=`<b>${T('sum_transport')}:</b> ${getTransportDisplayName(selectedTransport)}<br>`;}
     if(selectedCab){html+=`<b>${T('sum_cab')}:</b> ${getCabDisplayName(selectedCab)}<br>`;}
     if(flightState.selectedOffer){
-        html+=`<b>${T('sum_flight')}:</b> ${flightState.selectedOffer.airline} ${flightState.selectedOffer.origin}→${flightState.selectedOffer.destination} ${formatCurrency(flightState.selectedOffer.price)}/pp<br>`;
+        const fo = flightState.selectedOffer;
+        // Format dates
+        const fmtDT = (dt) => dt ? new Date(dt).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}) : '';
+        const fmtT  = (dt) => dt ? new Date(dt).toLocaleTimeString('en-IN',{timeStyle:'short'}) : '';
+        const stopsLabel = fo.stops === 0 ? 'Non-stop' : fo.stops + ' stop' + (fo.stops !== 1 ? 's' : '');
+        html += `<hr><b>✈️ ${T('sum_flight')}:</b><br>`;
+        html += `<span style="font-size:0.82rem">`;
+        html += `<b>${fo.airline}</b> ${fo.flightNumber || ''}<br>`;
+        html += `${fo.origin} → ${fo.destination}<br>`;
+        if(fo.departure) html += `Dep: ${fmtDT(fo.departure)}<br>`;
+        if(fo.arrival)   html += `Arr: ${fmtT(fo.arrival)}<br>`;
+        if(fo.duration)  html += `Duration: ${fo.duration}<br>`;
+        html += `${stopsLabel}`;
+        if(fo.cabinClass) html += ` · ${fo.cabinClass}`;
+        html += `<br>`;
+        if(fo.returnDeparture) {
+            html += `<br><b>Return leg:</b><br>`;
+            html += `${fo.destination} → ${fo.origin}<br>`;
+            html += `Dep: ${fmtDT(fo.returnDeparture)}<br>`;
+            if(fo.returnArrival)  html += `Arr: ${fmtT(fo.returnArrival)}<br>`;
+            if(fo.returnDuration) html += `Duration: ${fo.returnDuration}<br>`;
+        }
+        html += `<b>${formatCurrency(fo.price)}/person</b>`;
+        html += `</span><br>`;
     }
     if(selectedAddons.length>0){
         const names=selectedAddons.map(k=>{const a=allAddons.find(x=>x.internal_name===k);return a?a.name:k;});
@@ -3306,7 +3514,7 @@ function generateDummyRef() {
 }
 let _dummyBookingRef = null;
 
-function openBookingModal() {
+async function openBookingModal() {
     const hasFlightOffer = flightState.selectedOffer && flightState.selectedOffer.id;
     const hasHotelOffer = liveHotelState.selectedOffer && liveHotelState.selectedOffer.id && hotelSource === 'live';
     const hasCalc = !!window.lastCalculation;
@@ -3323,7 +3531,70 @@ function openBookingModal() {
         return;
     }
 
-    // Amadeus path: show the standard booking form
+    // ── LIVE FLIGHT: verify price with Amadeus before showing form ────────
+    if (hasFlightOffer) {
+        const modal = document.getElementById('bookingModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            bookingModalOpen = true;
+        }
+        // Show verifying state
+        const bmResult = document.getElementById('bm-result');
+        if (bmResult) {
+            bmResult.style.display = 'block';
+            bmResult.innerHTML = `<div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:14px;color:rgba(255,255,255,0.8);font-size:13px">
+                <div style="display:flex;align-items:center;gap:8px"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div>✈️ Verifying live flight price with Amadeus…</div>
+            </div>`;
+        }
+
+        try {
+            const vResp = await fetch(`${API_BASE}/api/flight-price-verify`, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    flight_offer_id: flightState.selectedOffer.id,
+                    adults: selectedAdults,
+                    children: selectedChildren || 0,
+                })
+            });
+            const vData = await vResp.json();
+
+            if (vData.success) {
+                const verifiedPrice = vData.price;
+                const originalPrice = flightState.selectedOffer.price;
+                const priceChanged = Math.abs(verifiedPrice - originalPrice) > 1;
+
+                // Update offer with verified price
+                if (vData.offer) {
+                    flightState.selectedOffer = {...flightState.selectedOffer, ...vData.offer};
+                } else if (verifiedPrice > 0) {
+                    flightState.selectedOffer.price = verifiedPrice;
+                }
+
+                let verifyMsg = vData.verified
+                    ? `✅ <b>Flight price verified!</b> Current price: <b>₹${verifiedPrice.toLocaleString('en-IN')}/person</b>`
+                    : `ℹ️ Using cached flight price: <b>₹${verifiedPrice.toLocaleString('en-IN')}/person</b>`;
+                if (priceChanged) {
+                    verifyMsg += `<br><span style="color:#fbbf24">⚠️ Price updated from ₹${originalPrice.toLocaleString('en-IN')} → ₹${verifiedPrice.toLocaleString('en-IN')}</span>`;
+                }
+                if (bmResult) {
+                    bmResult.innerHTML = `<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px;color:rgba(255,255,255,0.85);font-size:13px;margin-bottom:8px">${verifyMsg}</div>`;
+                }
+                updateSummary();
+            } else {
+                if (bmResult) {
+                    bmResult.innerHTML = `<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:12px;color:rgba(255,255,255,0.7);font-size:13px;margin-bottom:8px">⚠️ Could not verify price: ${vData.error||'try again'}. Proceeding with last known price.</div>`;
+                }
+            }
+        } catch(ve) {
+            console.warn('Price verify error:', ve);
+            if (bmResult) bmResult.innerHTML = '';
+        }
+        if (modal) document.getElementById('bm-adult-count').textContent = selectedAdults;
+        return;
+    }
+
+    // Hotel-only Amadeus path
     const modal = document.getElementById('bookingModal');
     if (modal) {
         modal.style.display = 'flex';
@@ -3553,6 +3824,8 @@ async function sendAIMessage(prefill){
     const msg=prefill||(input.value||'').trim();
     if(!msg)return;
     input.value='';
+    // Dismiss package cards when user starts a new conversation turn
+    _hidePackageCards();
     addUser(msg);
     addTypingIndicator();
 
@@ -3698,8 +3971,18 @@ function handleAIReply(reply){
             addBot(msg);
             setTimeout(()=>submitData(), 300);
             break;
-        // ── Non-state responses ───────────────────────────────────────────
-        case 'SUGGEST_UPGRADE':
+        // ── Package generation ─────────────────────────────────────────────
+        case 'GENERATE_PACKAGES':
+            addBot(msg||"Generating tailored packages for you... 🎉");
+            _triggerGeneratePackages(reply.intent || {});
+            break;
+
+        // ── Live Amadeus flight + hotel search ────────────────────────────
+        case 'FETCH_LIVE_DATA':
+            addBot(msg || "Searching live flights and hotels for you… ✈️🏨");
+            _triggerLiveSearch(reply.params || {});
+            break;
+
         case 'ASK_FIELD':
         case 'GENERAL_CHAT':
         default:
@@ -3717,6 +4000,349 @@ function handleAIReply(reply){
 document.getElementById('aiInput').addEventListener('keypress',e=>{
     if(e.key==='Enter') sendAIMessage();
 });
+
+/* ============================================================
+   PACKAGE CARD GENERATION & RENDERING
+   ============================================================ */
+let _selectedPackageIndex = -1;
+
+async function _triggerGeneratePackages(intent){
+    const container = document.getElementById('packageCardsContainer');
+    const scroll    = document.getElementById('pkgCardsScroll');
+    if(!container || !scroll) return;
+
+    // Show loading state
+    container.classList.add('visible');
+    const loadingMsg = (intent.flight_included || intent.origin)
+        ? `<div class="pkg-loading"><div class="spinner"></div><br>Searching live flights & hotels, then tailoring packages for you…</div>`
+        : `<div class="pkg-loading"><div class="spinner"></div><br>Finding the best options for you…</div>`;
+    scroll.innerHTML = loadingMsg;
+
+    // Scroll into view
+    container.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    try {
+        // Merge intent with current state for better defaults
+        const mergedIntent = {
+            destination: intent.destination || (window.allDestinations||[]).find(d=>d.internal_name===selectedDestination)?.internal_name || '',
+            nights:      intent.nights   || selectedNights   || 3,
+            adults:      intent.adults   || selectedAdults   || 2,
+            children:    intent.children !== undefined ? intent.children : (selectedChildren || 0),
+            rooms:       intent.rooms    || selectedRooms    || 1,
+            season:      intent.season   || selectedSeason   || 'ON',
+            budget:      intent.budget   || null,
+            travel_type: intent.travel_type || '',
+            flight_included: intent.flight_included || false,
+            hotel_preference: intent.hotel_preference || '',
+            // Live search params (passed through from FETCH_LIVE_DATA or GENERATE_PACKAGES with flight)
+            origin:         intent.origin || '',
+            destination_iata: intent.destination_iata || intent.destination || '',
+            departureDate:  intent.departureDate || '',
+            returnDate:     intent.returnDate || '',
+            trip_type:      intent.trip_type || 'one_way',
+            cityCode:       intent.cityCode || intent.destination_iata || intent.destination || '',
+        };
+
+        const resp = await fetch(`${API_BASE}/api/generate-packages`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({client_id: CLIENT_ID, intent: mergedIntent})
+        });
+
+        if(!resp.ok) throw new Error(`Server error ${resp.status}`);
+        const data = await resp.json();
+        const opts = data.package_options || [];
+
+        if(!opts.length){
+            scroll.innerHTML = `<div class="pkg-error">⚠ Could not generate packages. Please configure destinations, hotels, and transports in the admin panel.</div>`;
+            return;
+        }
+
+        // Show live data notice if live results were embedded
+        if(data.live_flights_found > 0 || data.live_hotels_found > 0) {
+            const notice = document.createElement('div');
+            notice.style.cssText = 'background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:0.5rem 0.75rem;margin-bottom:0.5rem;font-size:0.75rem;color:rgba(255,255,255,0.8);';
+            notice.innerHTML = `🌐 <b>Live Amadeus data embedded:</b> ${data.live_flights_found||0} flights · ${data.live_hotels_found||0} hotels — assigned across tiers`;
+            scroll.appendChild(notice);
+        }
+
+        _selectedPackageIndex = -1;
+        _renderPackageCards(opts);
+    } catch(e) {
+        console.error('Package generation error:', e);
+        scroll.innerHTML = `<div class="pkg-error">⚠ Could not load packages right now. Please try again.</div>`;
+    }
+}
+
+function _renderPackageCards(opts){
+    const scroll = document.getElementById('pkgCardsScroll');
+    if(!scroll) return;
+
+    scroll.innerHTML = '';
+    opts.forEach((pkg, idx) => {
+        const tierClass = `pkg-tier-${pkg.tier || 'comfort'}`;
+        const totalFmt  = pkg.calculated_total ? `₹${(pkg.calculated_total).toLocaleString('en-IN')}` : 'Calculating…';
+        const ppFmt     = pkg.per_person        ? `₹${(pkg.per_person).toLocaleString('en-IN')}/person` : '';
+        const highlights = (pkg.highlights || []).map(h=>`<span class="pkg-highlight">${h}</span>`).join('');
+        const addons     = pkg.add_on_names && pkg.add_on_names.length ? `<div style="font-size:0.7rem;color:rgba(255,255,255,0.5);margin-top:0.25rem;">Includes: ${pkg.add_on_names.join(', ')}</div>` : '';
+
+        const card = document.createElement('div');
+        card.className = 'pkg-card';
+        card.dataset.idx = idx;
+
+        // Live flight badge
+        let liveBadge = '';
+        if(pkg.live_flight) {
+            const lf = pkg.live_flight;
+            const dep = lf.departure ? new Date(lf.departure).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}) : '';
+            const stops = lf.stops === 0 ? 'Non-stop' : lf.stops + ' stop' + (lf.stops !== 1 ? 's' : '');
+            liveBadge += `<div class="pkg-live-flight" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:6px;padding:0.4rem 0.6rem;margin-top:0.4rem;font-size:0.72rem;">
+                <span style="color:#60a5fa;font-weight:600;">✈️ Live Flight (Amadeus)</span><br>
+                <span>${lf.airline} ${lf.flightNumber||''} · ${lf.origin}→${lf.destination}</span><br>
+                <span>${dep} · ${stops}${lf.cabinClass ? ' · '+lf.cabinClass : ''}</span><br>
+                <span style="color:#34d399;font-weight:600;">${formatCurrency(lf.price)}/person</span>
+            </div>`;
+        }
+        if(pkg.live_hotel) {
+            const lh = pkg.live_hotel;
+            liveBadge += `<div class="pkg-live-hotel" style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:0.4rem 0.6rem;margin-top:0.3rem;font-size:0.72rem;">
+                <span style="color:#34d399;font-weight:600;">🌐 Live Hotel (Amadeus)</span><br>
+                <span>${lh.hotelName}</span><br>
+                <span>${lh.roomType||'Standard'} · ${lh.nights} nights</span><br>
+                <span style="color:#34d399;font-weight:600;">${formatCurrency(lh.totalPrice)} total</span>
+            </div>`;
+        }
+
+        card.innerHTML = `
+            <div class="pkg-card-header">
+                <div class="pkg-card-title">${pkg.title||'Package Option'}</div>
+                <div class="pkg-card-price">
+                    <div class="total">${totalFmt}</div>
+                    ${ppFmt ? `<div class="per-person">${ppFmt}</div>` : ''}
+                </div>
+            </div>
+            <div class="pkg-card-desc">${pkg.description||''}</div>
+            <div class="pkg-card-highlights">${highlights}</div>
+            ${addons}
+            ${liveBadge}
+            <div class="pkg-card-footer" style="margin-top:0.5rem;">
+                <span class="pkg-tier-badge ${tierClass}">${(pkg.tier||'').charAt(0).toUpperCase()+(pkg.tier||'').slice(1)}</span>
+                <button class="pkg-select-btn" onclick="_selectPackage(${idx}, event)">Select Package</button>
+            </div>
+        `;
+        card.addEventListener('click', ()=>_selectPackage(idx));
+        scroll.appendChild(card);
+    });
+
+    // Store for selection
+    window._generatedPackages = opts;
+}
+
+function _selectPackage(idx, e){
+    if(e) e.stopPropagation();
+    const opts = window._generatedPackages || [];
+    if(idx < 0 || idx >= opts.length) return;
+
+    const pkg = opts[idx];
+    _selectedPackageIndex = idx;
+
+    // Highlight selected card
+    document.querySelectorAll('.pkg-card').forEach((c,i)=>{
+        c.classList.toggle('selected', i===idx);
+        const btn = c.querySelector('.pkg-select-btn');
+        if(btn) btn.textContent = i===idx ? '✓ Selected' : 'Select Package';
+    });
+
+    // Apply package state to main booking form
+    // Always set region_id directly from package data first (most reliable)
+    if(pkg.region_id) selectedRegion = pkg.region_id;
+
+    if(pkg.destination_key) {
+        const dest = (window.allDestinations||[]).find(d=>d.internal_name===pkg.destination_key);
+        if(dest){
+            selectedRegion      = dest.region_id;
+            selectedDestination = dest.display_name || dest.name || pkg.destination_key;
+        } else {
+            selectedDestination = pkg.destination || pkg.destination_key;
+        }
+    }
+    if(pkg.hotel)     selectedHotel     = pkg.hotel;
+    if(pkg.transport) selectedTransport = pkg.transport;
+    if(pkg.nights)    selectedNights    = pkg.nights;
+    if(pkg.adults)    selectedAdults    = pkg.adults;
+    if(pkg.children !== undefined) selectedChildren = pkg.children;
+    if(pkg.rooms)     selectedRooms     = pkg.rooms;
+    if(pkg.season)    selectedSeason    = pkg.season;
+    if(pkg.add_ons)   selectedAddons    = [...pkg.add_ons];
+
+    // ── Apply live flight from package if present ──────────────────────────
+    if(pkg.live_flight) {
+        const lf = pkg.live_flight;
+        flightState.selectedOffer = {
+            id:           lf.id,
+            airline:      lf.airline,
+            carrier:      lf.carrier || lf.airline,
+            flightNumber: lf.flightNumber,
+            origin:       lf.origin,
+            destination:  lf.destination,
+            departure:    lf.departure,
+            arrival:      lf.arrival,
+            duration:     lf.duration,
+            stops:        lf.stops,
+            returnDeparture: lf.returnDeparture,
+            returnArrival:   lf.returnArrival,
+            returnDuration:  lf.returnDuration,
+            price:        lf.price,
+            totalFare:    lf.totalFare || lf.price,
+            currency:     lf.currency || 'INR',
+            cabinClass:   lf.cabinClass,
+        };
+        flightState.mode = lf.returnDeparture ? 'return' : 'one_way';
+        flightState.detailData = null;
+    }
+
+    // ── Apply live hotel from package if present ───────────────────────────
+    if(pkg.live_hotel) {
+        const lh = pkg.live_hotel;
+        hotelSource = 'live';
+        liveHotelState.selectedOffer = {
+            id:              lh.id,
+            hotelId:         lh.hotelId || lh.id,
+            hotelName:       lh.hotelName,
+            cityCode:        lh.cityCode,
+            roomType:        lh.roomType || 'Standard',
+            boardType:       lh.boardType || 'Room Only',
+            checkIn:         lh.checkIn,
+            checkOut:        lh.checkOut,
+            nights:          lh.nights,
+            adults:          lh.adults,
+            rooms:           lh.rooms,
+            totalPrice:      lh.totalPrice,
+            pricePerNight:   lh.pricePerNight,
+            currency:        'INR',
+            originalPrice:   lh.originalPrice || lh.totalPrice,
+            originalCurrency: lh.originalCurrency || 'INR',
+        };
+    }
+
+    updateSummary();
+    setTimeout(()=>submitData(), 400);
+
+    addBot(`✅ **${pkg.title}** selected! Your trip summary has been updated. I'm calculating your exact price now...`);
+}
+
+function _hidePackageCards(){
+    const c = document.getElementById('packageCardsContainer');
+    if(c) c.classList.remove('visible');
+    window._generatedPackages = [];
+    _selectedPackageIndex = -1;
+}
+
+/* ============================================================
+   LIVE SEARCH (AI-triggered Amadeus flight + hotel search)
+   ============================================================ */
+async function _triggerLiveSearch(params){
+    addBot('🔍 Contacting Amadeus for live flights and hotels…');
+    try {
+        const resp = await fetch(`${API_BASE}/api/ai-live-search`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                origin:        params.origin || '',
+                destination:   params.destination || '',
+                cityCode:      params.cityCode || params.destination || '',
+                departureDate: params.departureDate || '',
+                returnDate:    params.returnDate || '',
+                trip_type:     params.trip_type || 'one_way',
+                adults:        params.adults || selectedAdults || 2,
+                children:      params.children !== undefined ? params.children : (selectedChildren || 0),
+                rooms:         params.rooms || selectedRooms || 1,
+                nights:        selectedNights || 3,
+            })
+        });
+        const data = await resp.json();
+
+        // Build response message
+        let summary = '';
+        const flights = data.flights || [];
+        const hotels  = data.hotels  || [];
+
+        if (flights.length > 0) {
+            summary += `\n\n✈️ **Found ${flights.length} live flights:**\n`;
+            flights.slice(0,3).forEach((f, i) => {
+                const dep = f.departure ? new Date(f.departure).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}) : '';
+                const arr = f.arrival   ? new Date(f.arrival).toLocaleTimeString('en-IN',{timeStyle:'short'}) : '';
+                const stops = f.stops === 0 ? 'Non-stop' : f.stops + ' stop' + (f.stops !== 1 ? 's' : '');
+                summary += `${i+1}. **${f.airline}** ${f.flightNumber} · ${f.origin}→${f.destination} · ${dep}–${arr} · ${stops} · ${f.cabinClass||'Economy'} · **${formatCurrency(f.price)}/person**\n`;
+            });
+            if (flights.length > 3) summary += `…and ${flights.length - 3} more options.\n`;
+        } else {
+            summary += '\n\n⚠️ No live flights found.';
+            if (data.errors && data.errors.length) summary += ' ' + data.errors.filter(e=>e.startsWith('Flight')).join('; ');
+        }
+
+        if (hotels.length > 0) {
+            summary += `\n\n🏨 **Found ${hotels.length} live hotels:**\n`;
+            hotels.slice(0,3).forEach((h, i) => {
+                summary += `${i+1}. **${h.hotelName}** · ${h.roomType||'Standard'} · ${h.nights} nights · **${formatCurrency(h.totalPrice)}**\n`;
+            });
+            if (hotels.length > 3) summary += `…and ${hotels.length - 3} more options.\n`;
+        } else {
+            summary += '\n\n⚠️ No live hotels found.';
+            if (data.errors && data.errors.length) summary += ' ' + data.errors.filter(e=>e.startsWith('Hotel')).join('; ');
+        }
+
+        // Store results for package building
+        window._liveSearchResults = { flights, hotels, params };
+
+        if (flights.length > 0 || hotels.length > 0) {
+            summary += '\n\nWould you like me to **build tailored packages** using these live results? Just say "yes" or "show packages"!';
+            addBot(summary.trim());
+
+            // Auto-trigger package generation if we have destination
+            if (params.destination) {
+                setTimeout(() => {
+                    _triggerGeneratePackages({
+                        destination: params.destination,
+                        nights: selectedNights || 3,
+                        adults: params.adults || selectedAdults || 2,
+                        children: params.children !== undefined ? params.children : (selectedChildren || 0),
+                        season: selectedSeason || 'ON',
+                        flight_included: true,
+                        origin: params.origin,
+                        departureDate: params.departureDate,
+                        returnDate: params.returnDate,
+                        trip_type: params.trip_type || 'one_way',
+                        cityCode: params.cityCode || params.destination,
+                        destination_iata: params.destination,
+                    });
+                }, 800);
+            }
+        } else {
+            // All live search failed — still try packages with preloaded options
+            summary += '\n\nFalling back to our curated hotel and transport options instead. Let me build you some packages!';
+            addBot(summary.trim());
+            if (params.destination) {
+                setTimeout(() => _triggerGeneratePackages({
+                    destination: params.destination,
+                    nights: selectedNights || 3,
+                    adults: params.adults || selectedAdults || 2,
+                }), 800);
+            }
+        }
+
+    } catch(e) {
+        console.error('Live search error:', e);
+        addBot('⚠️ Live search temporarily unavailable. Let me show you our curated packages instead!');
+        if (params.destination) {
+            setTimeout(() => _triggerGeneratePackages({destination: params.destination}), 600);
+        }
+    }
+}
+
+// Expose for quick-chip use
+window.triggerGeneratePackages = _triggerGeneratePackages;
+
 // Stop voice/TTS when user types manually
 document.getElementById('aiInput').addEventListener('input',()=>{
     window.voiceInteractionActive=false;
