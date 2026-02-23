@@ -1582,9 +1582,27 @@ function confirmDelete(message, detail) {
 }
 
 async function deleteEntity(type, id, rowEl) {
+    // Build a descriptive confirmation message
+    const typeLabels = {
+        regions: 'Region',
+        transports: 'Transport',
+        hotels: 'Hotel',
+        destinations: 'Destination',
+        cabs: 'Cab',
+        addons: 'Add-on',
+        'pricing-rules': 'Pricing Rule',
+        clients: 'Client',
+    };
+    const label = typeLabels[type] || type;
+
+    // Regions get a stronger warning since they wipe ALL child data
+    const detail = type === 'regions'
+        ? '⚠️ This will permanently delete this region AND all associated destinations, hotels, transports, cabs, add-ons, and pricing rules. This cannot be undone.'
+        : `This will permanently delete this ${label} from the database and all related data. This cannot be undone.`;
+
     const confirmed = await confirmDelete(
-        'Are you sure you want to permanently delete this item?',
-        `Type: ${type} | ID: ${id} — This action cannot be undone.`
+        `Permanently delete this ${label}?`,
+        detail
     );
     if (!confirmed) return;
 
@@ -1596,22 +1614,71 @@ async function deleteEntity(type, id, rowEl) {
             showMsg(errMsg, 'error');
             return;
         }
-        showMsg('Item deleted successfully');
-        // Remove the row from DOM if provided
-        if (rowEl) {
-            const tr = rowEl.closest('tr');
-            if (tr) {
-                tr.style.transition = 'opacity 0.3s';
-                tr.style.opacity = '0';
-                setTimeout(() => tr.remove(), 300);
-            }
+        showMsg(`${label} deleted successfully`);
+
+        // ── Notify any open index.html tabs to reload data ────────────────
+        try {
+            const bc = new BroadcastChannel('admin_data_change');
+            bc.postMessage({ type: 'delete', entityType: type, entityId: id });
+            bc.close();
+        } catch(bcErr) { /* BroadcastChannel not available — silent */ }
+
+        // ── Full cascade-aware in-memory update ──────────────────────────
+        if (type === 'regions') {
+            // Remove region and all child entities from every in-memory array
+            const removedRegion = allRegions.find(r => r.id === id);
+            allRegions       = allRegions.filter(r => r.id !== id);
+            allTransports    = allTransports.filter(t => t.region_id !== id);
+            allDestinations  = allDestinations.filter(d => d.region_id !== id);
+            allHotels        = allHotels.filter(h => h.region_id !== id);
+            allCabs          = allCabs.filter(c => c.region_id !== id);
+            allAddons        = allAddons.filter(a => a.region_id !== id);
+            // Also remove orphaned pricing rules referencing region entities (reload from server)
+            // Re-render every affected table
+            displayRegions();
+            updateRegionSelects();
+            displayTransports();
+            displayDestinations();
+            displayHotels();
+            displayCabs();
+            displayAddons();
+            // Reload rules and matrix since they may reference deleted entities
+            await Promise.all([loadRules(), loadCabDestMatrix()]);
+        } else if (type === 'transports') {
+            allTransports = allTransports.filter(t => t.id !== id);
+            displayTransports();
+            await loadRules(); // rules may reference this transport
+        } else if (type === 'hotels') {
+            allHotels = allHotels.filter(h => h.id !== id);
+            displayHotels();
+            await loadRules();
+        } else if (type === 'destinations') {
+            allDestinations = allDestinations.filter(d => d.id !== id);
+            displayDestinations();
+            await Promise.all([loadRules(), loadCabDestMatrix()]); // matrix has dest columns
+        } else if (type === 'cabs') {
+            allCabs = allCabs.filter(c => c.id !== id);
+            displayCabs();
+            await Promise.all([loadRules(), loadCabDestMatrix()]); // matrix has cab rows
+        } else if (type === 'addons') {
+            allAddons = allAddons.filter(a => a.id !== id);
+            displayAddons();
+            await loadRules();
+        } else if (type === 'pricing-rules') {
+            allRules = allRules.filter(r => r.id !== id);
+            displayRules();
+        } else if (type === 'clients') {
+            allClients = allClients.filter(c => c.id !== id);
+            displayClients();
         } else {
-            // Fallback: reload the relevant section
+            // Unknown type — full reload as fallback
             await loadAll();
         }
+
     } catch (e) {
         console.error('Delete error:', e);
         showMsg('Failed to delete — network error', 'error');
+        await loadAll(); // Ensure consistent state on network error
     }
 }
 
@@ -1684,6 +1751,7 @@ function editClient(id) {
  *   2. Backend now returns {success, active, message} — use returned active state
  *   3. Instead of full loadAll() reload, updates the in-memory cached array and
  *      re-renders only the specific entity table. This eliminates race conditions.
+ *   4. Broadcasts toggle event via BroadcastChannel so index.html updates instantly.
  */
 async function toggleEntity(type, id, active) {
     // Map API type to the in-memory array and re-render function for targeted update
@@ -1695,7 +1763,7 @@ async function toggleEntity(type, id, active) {
         'destinations':  { arr: () => allDestinations,  set: v => { allDestinations = v; },  render: displayDestinations },
         'cabs':          { arr: () => allCabs,          set: v => { allCabs = v; },          render: displayCabs },
         'addons':        { arr: () => allAddons,        set: v => { allAddons = v; },        render: displayAddons },
-        'pricing-rules': { arr: () => allPricingRules,  set: v => { allPricingRules = v; },  render: displayPricingRules },
+        'pricing-rules': { arr: () => allRules,  set: v => { allRules = v; },  render: displayRules },
     };
 
     try {
@@ -1725,6 +1793,13 @@ async function toggleEntity(type, id, active) {
         }
 
         showMsg(data.message || 'Status updated');
+
+        // ── Notify any open index.html tabs to reload data ────────────────
+        try {
+            const bc = new BroadcastChannel('admin_data_change');
+            bc.postMessage({ type: 'toggle', entityType: type, entityId: id, active: actualActive });
+            bc.close();
+        } catch(bcErr) { /* BroadcastChannel not available — silent fallback */ }
 
     } catch (e) {
         console.error('Toggle error:', e);

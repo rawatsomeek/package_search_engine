@@ -1504,6 +1504,45 @@ async function loadAllData(){
     }catch(e){console.error("Data load failed:",e);}
 }
 
+// ── React to admin changes instantly via BroadcastChannel ────────────────────
+// When admin toggles active/inactive or deletes anything, index.html reloads
+// all active data from the server and re-renders the current step.
+(function _listenForAdminChanges() {
+    // BroadcastChannel: same-origin cross-tab communication
+    try {
+        const bc = new BroadcastChannel('admin_data_change');
+        bc.onmessage = async () => {
+            console.log('[index] Admin data change detected — reloading active data');
+            await loadAllData();
+            // Re-render the current step so deactivated items disappear immediately
+            if (typeof renderStep === 'function') renderStep();
+            if (typeof updateSummary === 'function') updateSummary();
+        };
+    } catch(e) { /* BroadcastChannel not supported — polling fallback below */ }
+
+    // Polling fallback: check for changes every 45 seconds
+    // Lightweight — uses same active_only=1 calls as initial load
+    let _pollTimer = null;
+    function _startPolling() {
+        if (_pollTimer) return;
+        _pollTimer = setInterval(async () => {
+            try {
+                await loadAllData();
+                // Only re-render if we're in a step that shows a list (not mid-booking)
+                if (typeof renderStep === 'function' && typeof currentStep !== 'undefined') {
+                    // Re-render silently — user won't notice unless something changed
+                    renderStep();
+                }
+            } catch(e) { /* silent */ }
+        }, 45000);
+    }
+
+    // Start polling after initial load completes
+    document.addEventListener('DOMContentLoaded', () => setTimeout(_startPolling, 3000));
+    // Also start if page already loaded
+    if (document.readyState !== 'loading') setTimeout(_startPolling, 3000);
+})();
+
 /* ============================================================
    DISPLAY NAME HELPERS
    ============================================================ */

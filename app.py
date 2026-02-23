@@ -2682,6 +2682,22 @@ def delete_region(rid):
         cur.execute("SELECT id FROM cabs WHERE region_id=%s", (rid,))
         cab_ids = [r[0] for r in cur.fetchall()]
 
+        # Get all destinations in this region for rate + pricing_rule cleanup
+        cur.execute("SELECT id FROM destinations WHERE region_id=%s", (rid,))
+        dest_ids = [r[0] for r in cur.fetchall()]
+
+        # Get all hotels in this region
+        cur.execute("SELECT id FROM hotels WHERE region_id=%s", (rid,))
+        hotel_ids = [r[0] for r in cur.fetchall()]
+
+        # Get all transports in this region
+        cur.execute("SELECT id FROM transports WHERE region_id=%s", (rid,))
+        transport_ids = [r[0] for r in cur.fetchall()]
+
+        # Get all addons in this region
+        cur.execute("SELECT id FROM addons WHERE region_id=%s", (rid,))
+        addon_ids = [r[0] for r in cur.fetchall()]
+
         # Delete cab_destination_rates for cabs in this region
         if cab_ids:
             cur.execute(
@@ -2689,16 +2705,50 @@ def delete_region(rid):
                 (cab_ids,)
             )
 
+        # Delete cab_destination_rates for destinations in this region
+        if dest_ids:
+            cur.execute(
+                "DELETE FROM cab_destination_rates WHERE destination_id = ANY(%s)",
+                (dest_ids,)
+            )
+
+        # Delete all pricing_rules referencing any entity in this region
+        if dest_ids:
+            cur.execute(
+                "DELETE FROM pricing_rules WHERE entity_type='destination' AND entity_id = ANY(%s)",
+                (dest_ids,)
+            )
+        if hotel_ids:
+            cur.execute(
+                "DELETE FROM pricing_rules WHERE entity_type='hotel' AND entity_id = ANY(%s)",
+                (hotel_ids,)
+            )
+        if transport_ids:
+            cur.execute(
+                "DELETE FROM pricing_rules WHERE entity_type='transport' AND entity_id = ANY(%s)",
+                (transport_ids,)
+            )
+        if cab_ids:
+            cur.execute(
+                "DELETE FROM pricing_rules WHERE entity_type='cab' AND entity_id = ANY(%s)",
+                (cab_ids,)
+            )
+        if addon_ids:
+            cur.execute(
+                "DELETE FROM pricing_rules WHERE entity_type='addon' AND entity_id = ANY(%s)",
+                (addon_ids,)
+            )
+
         # Hard delete all child entities in dependency order
         cur.execute("DELETE FROM addons WHERE region_id=%s", (rid,))
         cur.execute("DELETE FROM cabs WHERE region_id=%s", (rid,))
 
         # Null out destination_id on hotels before deleting destinations
-        cur.execute(
-            """UPDATE hotels SET destination_id=NULL
-               WHERE destination_id IN (SELECT id FROM destinations WHERE region_id=%s)""",
-            (rid,)
-        )
+        if dest_ids:
+            cur.execute(
+                "UPDATE hotels SET destination_id=NULL WHERE destination_id = ANY(%s)",
+                (dest_ids,)
+            )
         cur.execute("DELETE FROM destinations WHERE region_id=%s", (rid,))
         cur.execute("DELETE FROM hotels WHERE region_id=%s", (rid,))
         cur.execute("DELETE FROM transports WHERE region_id=%s", (rid,))
@@ -2730,11 +2780,20 @@ def list_transports():
     db = get_db()
     cur = db.cursor()
     try:
-        active_clause = " AND active=TRUE" if active_only else ""
-        cur.execute(
-            f"SELECT * FROM transports WHERE client_id=%s{active_clause} ORDER BY name",
-            (client_id,)
-        )
+        if active_only:
+            # Only return transports whose entity AND region are both active
+            cur.execute(
+                """SELECT t.* FROM transports t
+                   JOIN regions r ON t.region_id = r.id
+                   WHERE t.client_id=%s AND t.active=TRUE AND r.active=TRUE
+                   ORDER BY t.name""",
+                (client_id,)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM transports WHERE client_id=%s ORDER BY name",
+                (client_id,)
+            )
         result = rows_to_dicts(cur, cur.fetchall())
         db.close()
         return jsonify(result)
@@ -2869,9 +2928,11 @@ def delete_transport(tid):
             return jsonify({'error': f'Transport {tid} not found', 'deleted': False}), 404
 
         transport_name = row[1]
+        # Clean up pricing_rules that reference this transport specifically
+        cur.execute("DELETE FROM pricing_rules WHERE entity_type='transport' AND entity_id=%s", (tid,))
         cur.execute("DELETE FROM transports WHERE id=%s", (tid,))
         db.commit()
-        logger.info(f"Hard deleted transport ID {tid} ({transport_name})")
+        logger.info(f"Hard deleted transport ID {tid} ({transport_name}) and its pricing rules")
         return jsonify({
             'message': f'Transport "{transport_name}" permanently deleted',
             'deleted': True,
@@ -2896,11 +2957,19 @@ def list_hotels():
     db = get_db()
     cur = db.cursor()
     try:
-        active_clause = " AND active=TRUE" if active_only else ""
-        cur.execute(
-            f"SELECT * FROM hotels WHERE client_id=%s{active_clause} ORDER BY name",
-            (client_id,)
-        )
+        if active_only:
+            cur.execute(
+                """SELECT h.* FROM hotels h
+                   JOIN regions r ON h.region_id = r.id
+                   WHERE h.client_id=%s AND h.active=TRUE AND r.active=TRUE
+                   ORDER BY h.name""",
+                (client_id,)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM hotels WHERE client_id=%s ORDER BY name",
+                (client_id,)
+            )
         result = rows_to_dicts(cur, cur.fetchall())
         db.close()
         return jsonify(result)
@@ -3056,9 +3125,11 @@ def delete_hotel(hid):
             return jsonify({'error': f'Hotel {hid} not found', 'deleted': False}), 404
 
         hotel_name = row[1]
+        # Clean up pricing_rules that reference this hotel specifically
+        cur.execute("DELETE FROM pricing_rules WHERE entity_type='hotel' AND entity_id=%s", (hid,))
         cur.execute("DELETE FROM hotels WHERE id=%s", (hid,))
         db.commit()
-        logger.info(f"Hard deleted hotel ID {hid} ({hotel_name})")
+        logger.info(f"Hard deleted hotel ID {hid} ({hotel_name}) and its pricing rules")
         return jsonify({
             'message': f'Hotel "{hotel_name}" permanently deleted',
             'deleted': True,
@@ -3083,11 +3154,19 @@ def list_destinations():
     db = get_db()
     cur = db.cursor()
     try:
-        active_clause = " AND active=TRUE" if active_only else ""
-        cur.execute(
-            f"SELECT * FROM destinations WHERE client_id=%s{active_clause} ORDER BY name",
-            (client_id,)
-        )
+        if active_only:
+            cur.execute(
+                """SELECT d.* FROM destinations d
+                   JOIN regions r ON d.region_id = r.id
+                   WHERE d.client_id=%s AND d.active=TRUE AND r.active=TRUE
+                   ORDER BY d.name""",
+                (client_id,)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM destinations WHERE client_id=%s ORDER BY name",
+                (client_id,)
+            )
         result = rows_to_dicts(cur, cur.fetchall())
         db.close()
         return jsonify(result)
@@ -3224,6 +3303,10 @@ def delete_destination(did):
 
         # Null out FK references in hotels before deletion to avoid constraint violations
         cur.execute("UPDATE hotels SET destination_id=NULL WHERE destination_id=%s", (did,))
+        # Clean up pricing_rules that reference this destination specifically
+        cur.execute("DELETE FROM pricing_rules WHERE entity_type='destination' AND entity_id=%s", (did,))
+        # Clean up cab_destination_rates for this destination
+        cur.execute("DELETE FROM cab_destination_rates WHERE destination_id=%s", (did,))
         cur.execute("DELETE FROM destinations WHERE id=%s", (did,))
         db.commit()
         logger.info(f"Hard deleted destination ID {did} ({destination_name})")
@@ -3251,11 +3334,19 @@ def list_cabs():
     db = get_db()
     cur = db.cursor()
     try:
-        active_clause = " AND active=TRUE" if active_only else ""
-        cur.execute(
-            f"SELECT * FROM cabs WHERE client_id=%s{active_clause} ORDER BY name",
-            (client_id,)
-        )
+        if active_only:
+            cur.execute(
+                """SELECT c.* FROM cabs c
+                   JOIN regions r ON c.region_id = r.id
+                   WHERE c.client_id=%s AND c.active=TRUE AND r.active=TRUE
+                   ORDER BY c.name""",
+                (client_id,)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM cabs WHERE client_id=%s ORDER BY name",
+                (client_id,)
+            )
         result = rows_to_dicts(cur, cur.fetchall())
         db.close()
         return jsonify(result)
@@ -3387,6 +3478,8 @@ def delete_cab(cid):
 
         # Delete associated rates first to avoid orphan rows
         cur.execute("DELETE FROM cab_destination_rates WHERE cab_id=%s", (cid,))
+        # Clean up pricing_rules that reference this cab specifically
+        cur.execute("DELETE FROM pricing_rules WHERE entity_type='cab' AND entity_id=%s", (cid,))
         cur.execute("DELETE FROM cabs WHERE id=%s", (cid,))
         db.commit()
         logger.info(f"Hard deleted cab ID {cid} ({cab_name}) and its destination rates")
@@ -3552,11 +3645,19 @@ def list_addons():
     db = get_db()
     cur = db.cursor()
     try:
-        active_clause = " AND active=TRUE" if active_only else ""
-        cur.execute(
-            f"SELECT * FROM addons WHERE client_id=%s{active_clause} ORDER BY name",
-            (client_id,)
-        )
+        if active_only:
+            cur.execute(
+                """SELECT a.* FROM addons a
+                   JOIN regions r ON a.region_id = r.id
+                   WHERE a.client_id=%s AND a.active=TRUE AND r.active=TRUE
+                   ORDER BY a.name""",
+                (client_id,)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM addons WHERE client_id=%s ORDER BY name",
+                (client_id,)
+            )
         result = rows_to_dicts(cur, cur.fetchall())
         db.close()
         return jsonify(result)
@@ -3727,6 +3828,8 @@ def delete_addon(aid):
             return jsonify({'error': f'Addon {aid} not found', 'deleted': False}), 404
 
         addon_name = row[1]
+        # Clean up pricing_rules that reference this addon specifically
+        cur.execute("DELETE FROM pricing_rules WHERE entity_type='addon' AND entity_id=%s", (aid,))
         cur.execute("DELETE FROM addons WHERE id=%s", (aid,))
         db.commit()
         logger.info(f"Hard deleted addon ID {aid} ({addon_name})")
